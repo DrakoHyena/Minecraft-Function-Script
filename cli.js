@@ -20,7 +20,7 @@ async function main() {
 				}
 				(await import("./procedures/build.js")).main(args[i+1])
 			return;
-		}
+		} 
 	}
 
 	console.log("The provided argument(s) are non-existant or invalid")
