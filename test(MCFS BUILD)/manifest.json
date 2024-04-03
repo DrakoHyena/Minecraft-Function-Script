@@ -1,0 +1,22 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "test",
+		"description": "a little test project",
+		"uuid": "bb445c62-90f0-44da-8c7b-316a7bca3b47",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 19, 73]
+	},
+	"modules": [
+		{
+			"description": "a little test project",
+			"type": "data",
+			"uuid": "5ed10f91-4654-464c-a91a-9b7c8a12051c",
+			"version": [1, 0, 0]
+		}
+	],
+	"metadata": {
+		"Made with": "MCFS",
+		"MCFS Source": "https://..."
+	}
+}
