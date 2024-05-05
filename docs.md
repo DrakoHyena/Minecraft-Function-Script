@@ -23,3 +23,10 @@ function test () {
 	command summon pig;
 };
 ```
+
+## Code Commands
+### \# `<text>`
+A comment. Does not get included in the generated mcfunction file.
+
+### mccmd `<minecraft command>`
+Directly includes `<minecraft commad>` into the generated mcfunction file
