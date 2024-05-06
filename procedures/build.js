@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
+import { generateCommandBlock } from "../mcstructure/coder.js";
+
 const bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
 export function main(project) {
@@ -78,10 +80,12 @@ export function main(project) {
 		function genLineOutput(line){
 			// Get the line of code
 			for (let i = 0, iStart = 0; i < fileContent.length; i++) {
-				if (fileContent[i] === ";") {
-					const line = fileContent.substring(iStart, ++i).trim();
-					compileLine(line);
-					iStart = i;
+				if (fileContent[i] === ";" || fileContent[i] === "\r" || fileContent[i] === "\n" || i === fileContent.length-1) {
+					const line = fileContent.substring(
+						iStart, i + (i===fileContent.length-1&&fileContent[i]!==";"?1:0) // We need to go one more index at the end of files if it doesnt end in a ;
+					).trim().replaceAll("\t", "");
+					if(line !== "") compileLine(line);
+					iStart = i+1;
 				}
 			}
 			// Convert that line of code to a lineOutput array
@@ -89,7 +93,7 @@ export function main(project) {
 				const lineArr = [];
 				for(let i = 0, lastSpace = 0; i < line.length; i++){
 					if(line[i] === " " || i === line.length-1){
-						lineArr.push(line.substring(i, lastSpace));
+						lineArr.push(line.substring(i+(i===line.length-1?1:0), lastSpace)); // We also need to go one more index at the end of lines
 						lastSpace = i+1;
 					}
 				}
@@ -98,16 +102,66 @@ export function main(project) {
 		}
 
 		function genMcFunctOutput(){
-			for(let line of lineOutput){
-				switch(line[0]){
-					case "#":
-					break;
-					case "mccmd":
-						line.shift();
-						mcfunctOutput += line.join(" ");
-						mcfunctOutput += "\n";
-					break;
+			const scopes = [];
+			class Scope{
+				constructor(onEnd){
+					this.contents = [];
+
+					if (!onEnd) throw new Error("[COMPILER ERR] No \"onEnd\" function specified for scope");
+					this.onEnd = onEnd;
+
+					scopes.push(this);
 				}
+			}
+
+			function compileArr(arr){
+				for (let line of arr) {
+					if (scopes.length !== 0 && line[0] !== "end") {
+						scopes[scopes.length - 1].contents.push(line);
+						continue;
+					}
+					switch (line[0]) {
+						case "#":
+							break;
+						case "var":
+							const type = line[1].substring(0, 1);
+							if(type !== "$" || type !== "*"){
+								
+							}
+						break;
+						case "cmd":
+							line.shift();
+							mcfunctOutput += line.join(" ");
+							mcfunctOutput += "\n";
+							break;
+						case "repeat":
+							let preMcFunctOutput = mcfunctOutput;
+							mcfunctOutput = "";
+							const times = Number(line[1]);
+
+							new Scope(function () {
+								for(let i = 0; i < times; i++){
+									compileArr(JSON.parse(JSON.stringify(this.contents)))
+								}
+								mcfunctOutput = preMcFunctOutput + mcfunctOutput;
+							})
+							break;
+						case "end":
+							if (scopes.length === 0) {
+								throw new Error("\"end\" instruction called while no scope is active")
+							}
+							scopes.pop().onEnd();
+							break;
+						default:
+							throw new Error(`Unknown instruction "${line[0]}" (${line.join(" ")})`)
+							break;
+					}
+				}
+			}
+			compileArr(lineOutput);
+
+			if(scopes.length !== 0){
+				throw new Error("Unanswered scope instruction");
 			}
 		}
 
