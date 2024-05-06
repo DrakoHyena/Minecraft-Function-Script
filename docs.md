@@ -55,5 +55,9 @@ Ex: `var &adder = 123456`
 	- Adds the value to the variable
 - \-
 	- Subtracts the value from the variable
+- \*
+	- Multiplies the variable by the value
+- \^
+	- Exponentiates the variable by the value
 - %
-	- Sets the variable to the result of a modulus operation on the variable by the value 
+	- Sets the variable to the result of a modulus operation on the variable by the value

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
-const bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
+import * as crypto from "node:crypto";
+const bhPackFolder = "./" //`${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
 export function main(name, description) {
 	if (/^[a-zA-Z0-9_]+$/g.test(name) === false || /^[a-zA-Z0-9_ ]+$/g.test(description) === false) {
@@ -16,6 +17,6 @@ export function main(name, description) {
 
 		// Make main file
 		fs.writeFileSync(bhPackFolder + folderName + "/metadata", `${name};${description};${crypto.randomUUID()};${crypto.randomUUID()}`)
-		fs.writeFileSync(bhPackFolder + folderName + "/main.mcfs", "# Code below..;")
+		fs.writeFileSync(bhPackFolder + folderName + "/main.mcfs", `# Code below...`)
 	}
 }
