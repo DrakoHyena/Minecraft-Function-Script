@@ -1,5 +1,7 @@
 repeat 2
 	repeat 2
-		cmd say hi
+		repeat 2
+			cmd say hi
+		end;
 	end;
 end;

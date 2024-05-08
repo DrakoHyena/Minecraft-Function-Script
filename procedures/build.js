@@ -70,6 +70,41 @@ export function main(project) {
 	fs.mkdirSync(buildPath+"functions")
 
 	// Compile Functions
+	const instructions = {};
+	const scopes = [];
+	class Instruction {
+		constructor(name, onCall, onScopeEnd) {
+			this.name = name;
+			this.onCall = onCall;
+			this.doesScope = !!onScopeEnd;
+			if (this.doesScope === true) {
+				new Scope(onScopeEnd);
+			}
+			instructions[name] = this;
+		}
+	}
+	class Scope {
+		constructor(onEnd) {
+			this.contents = [];
+			this.onEnd = onEnd;
+			scopes.push(this);
+		}
+	}
+
+	new Instruction("var", function(line){
+		const type = line[1].substring(0, 1);
+		if(type !== "$" || type !== "*"){
+
+		}
+	});
+
+	new Instruction("cmd", function(line){
+		line.shift();
+		mcfunctOutput += line.join(" ");
+		mcfunctOutput += "\n";
+	})
+
+
 	function compileFile(filePath) {
 		if(fs.existsSync(srcPath+filePath) === false) throw new Error(`Tried to compile nonexistant file (${filePath})`);
 		
@@ -102,37 +137,25 @@ export function main(project) {
 		}
 
 		function genMcFunctOutput(){
-			const scopes = [];
-			class Scope{
-				constructor(onEnd){
-					this.contents = [];
-
-					if (!onEnd) throw new Error("[COMPILER ERR] No \"onEnd\" function specified for scope");
-					this.onEnd = onEnd;
-
-					scopes.push(this);
-				}
-			}
-
 			function compileArr(arr){
 				for (let line of arr) {
-					if (scopes.length !== 0 && line[0] !== "end") {
+					if(line[0] === "#") continue; // Skip comments
+
+					if (scopes.length !== 0 && !scopeContentsExceptions.includes(line[0])) {
 						scopes[scopes.length - 1].contents.push(line);
 						continue;
 					}
+
+					if(instructions[line[0]]){
+						instructions[line[0]].onCall(line);
+					}else{
+						throw new Error(`Unknown instruction "${line[0]}" (${line.join(" ")})`)
+					}
 					switch (line[0]) {
-						case "#":
-							break;
+
 						case "var":
-							const type = line[1].substring(0, 1);
-							if(type !== "$" || type !== "*"){
-								
-							}
 						break;
 						case "cmd":
-							line.shift();
-							mcfunctOutput += line.join(" ");
-							mcfunctOutput += "\n";
 							break;
 						case "repeat":
 							let preMcFunctOutput = mcfunctOutput;
@@ -153,7 +176,6 @@ export function main(project) {
 							scopes.pop().onEnd();
 							break;
 						default:
-							throw new Error(`Unknown instruction "${line[0]}" (${line.join(" ")})`)
 							break;
 					}
 				}
