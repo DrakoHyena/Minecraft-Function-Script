@@ -70,15 +70,18 @@ export function main(project) {
 	fs.mkdirSync(buildPath+"functions")
 
 	// Compile Functions
+	let mcfunctOutput = "";
 	const instructions = {};
 	const scopes = [];
 	class Instruction {
 		constructor(name, onCall, onScopeEnd) {
 			this.name = name;
-			this.onCall = onCall;
 			this.doesScope = !!onScopeEnd;
-			if (this.doesScope === true) {
-				new Scope(onScopeEnd);
+			this.onCall = function(){
+				if (this.doesScope === true) {
+					this.scope = new Scope(onScopeEnd);
+				}
+				onCall.apply(this, arguments);
 			}
 			instructions[name] = this;
 		}
@@ -91,25 +94,62 @@ export function main(project) {
 		}
 	}
 
-	new Instruction("var", function(line){
+	// Instructions
+	new Instruction("var", (line)=>{
 		const type = line[1].substring(0, 1);
 		if(type !== "$" || type !== "*"){
 
 		}
 	});
 
-	new Instruction("cmd", function(line){
+	new Instruction("cmd", (line)=>{
 		line.shift();
 		mcfunctOutput += line.join(" ");
 		mcfunctOutput += "\n";
 	})
 
+	new Instruction("repeat", function(line){
+		this.scope.storedMcfunctOutput = mcfunctOutput;
+		this.scope.times = Number(line[1]);
+		mcfunctOutput = "";
+	}, function(){
+		for (let i = 0; i < this.times; i++) {
+			compileArr(JSON.parse(JSON.stringify(this.contents)))
+		}
+		mcfunctOutput = this.storedMcfunctOutput + mcfunctOutput;
+	})
+
+	new Instruction("end", (line)=>{
+		if (scopes.length === 0) {
+			throw new Error("\"end\" instruction called while no scope is active");
+		}
+		scopes.pop().onEnd();
+	})
+
+	const scopeContentsExceptions = [
+		"end",
+		"repeat"
+	]
+	function compileArr(arr) {
+		for (let line of arr) {
+			if (line[0] === "#") continue; // Skip comments
+			let excluded = scopeContentsExceptions.includes(line[0])
+			if (scopes.length !== 0 && !excluded) {
+				scopes[scopes.length - 1].contents.push(line);
+				continue;
+			}
+			if (instructions[line[0]]) {
+				instructions[line[0]].onCall(line);
+			} else {
+				throw new Error(`Unknown instruction "${line[0]}" (${line.join(" ")})`)
+			}
+		}
+	}
 
 	function compileFile(filePath) {
 		if(fs.existsSync(srcPath+filePath) === false) throw new Error(`Tried to compile nonexistant file (${filePath})`);
 		
 		const fileContent = fs.readFileSync(srcPath+filePath, {encoding:"utf8"});
-		let mcfunctOutput = "";
 		const lineOutput = [];
 
 		function genLineOutput(line){
@@ -137,49 +177,6 @@ export function main(project) {
 		}
 
 		function genMcFunctOutput(){
-			function compileArr(arr){
-				for (let line of arr) {
-					if(line[0] === "#") continue; // Skip comments
-
-					if (scopes.length !== 0 && !scopeContentsExceptions.includes(line[0])) {
-						scopes[scopes.length - 1].contents.push(line);
-						continue;
-					}
-
-					if(instructions[line[0]]){
-						instructions[line[0]].onCall(line);
-					}else{
-						throw new Error(`Unknown instruction "${line[0]}" (${line.join(" ")})`)
-					}
-					switch (line[0]) {
-
-						case "var":
-						break;
-						case "cmd":
-							break;
-						case "repeat":
-							let preMcFunctOutput = mcfunctOutput;
-							mcfunctOutput = "";
-							const times = Number(line[1]);
-
-							new Scope(function () {
-								for(let i = 0; i < times; i++){
-									compileArr(JSON.parse(JSON.stringify(this.contents)))
-								}
-								mcfunctOutput = preMcFunctOutput + mcfunctOutput;
-							})
-							break;
-						case "end":
-							if (scopes.length === 0) {
-								throw new Error("\"end\" instruction called while no scope is active")
-							}
-							scopes.pop().onEnd();
-							break;
-						default:
-							break;
-					}
-				}
-			}
 			compileArr(lineOutput);
 
 			if(scopes.length !== 0){
