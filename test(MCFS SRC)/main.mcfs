@@ -1,7 +1,0 @@
-repeat 2
-	repeat 3
-		repeat 2
-			cmd say hi
-		end;
-	end;
-end;

@@ -38,16 +38,38 @@ Directly includes `<minecraft commad>` into the generated mcfunction file.
 Creates either a compiler variable or in game variable.
 Ex: `var &adder = 123456`
 #### Variable Types
-- &
-	- Compiler variable
-	- Can be a string ("like this") a boolean (true/false) or a number
-	- All assingments and operations are ran directly in the compiler's language of choice, in this case, javascript
-- $
-	- In game variable
-	- Can be referenced inside tellraw/titleraw
-	- Can be used to manipulate other scoreboard values
-	- Can only be a number
-	- All operations are ran inside minecraft
+##### $ (Compiler variables)
+Dollar signs represent compiler variables. These variables can be thought of as "macro variables" found in some other languages.
+Their values are calculated during compile time and their output is put directly into the resulting mcfunction file.
+All values that can be applied via operations must be a string ("like this"), a boolean (true/false), a number (1000.1), or another compiler variable.
+Adding a string to a number, or the other way around, will just append the number to the string in it's respective order.
+If you call an undefined compiler variable an error will be thrown and the build process will fail.
+Here is an example.
+Input:
+```mcfs
+var $counter = 0;
+repeat 3
+	var $counter + 1;
+	cmd say counter is at: $counter;
+end;
+```
+Output:
+```mcfunction
+say counter is at: 1
+say counter is at: 2
+say counter is at: 3
+```
+
+##### & (Game variables)
+Ampersands represent in-game variables. In a nut shell, these variables are just dummy scoreboard players that are managed by MCFS. Due to minecraft's limitations the only values these variables can be are the numbers through... TODO: ADD THE NUMBERS. The big difference between game variables and compilier variables is that game variables are calculated and stored inside of minecraft, meaning, they are able to be used dynamically in commands such as tellraw or titleraw. If you call an undefined game variable an error will be thrown and the build process will fail. Here is an example.
+TODO: MAKE THE INPUT AND OUTPUT
+Input:
+```mcfs
+```
+Output:
+```mcfunction
+```
+
 #### Operations
 - =
 	- Sets the variable equal to the value
@@ -59,5 +81,6 @@ Ex: `var &adder = 123456`
 	- Multiplies the variable by the value
 - \^
 	- Exponentiates the variable by the value
+	- TODO: Might be REALLY bad for game vars
 - %
 	- Sets the variable to the result of a modulus operation on the variable by the value
