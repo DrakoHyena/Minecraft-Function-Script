@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { generateCommandBlock } from "../mcstructure/coder.js";
+import { pathToFileURL } from "node:url";
 
-const bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
+const bhPackFolder = "./" //`${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
-export function main(project) {
-	const projectSrc = project + "(MCFS SRC)";
-	const projectBuild = project + "(MCFS BUILD)";
+export function main(inputs, flags) {
+	const project = inputs[0];
+	const projectSrc = project + "(MCFS-SRC)";
+	const projectBuild = project + "(MCFS-BUILD)";
 	const buildPath = bhPackFolder + projectBuild + "/";
 	const srcPath = bhPackFolder + projectSrc + "/";
 
@@ -73,7 +76,26 @@ export function main(project) {
 	let mcfunctOutput = "";
 	const instructions = {};
 	const scopes = [];
+	const file = {
+		name: "", 
+		line: 0
+	}
 
+	class MCFSError extends Error {
+		constructor(type, message, line) {
+			super(message);
+
+			this.name = type;
+			const stackArr = this.stack.split("\n");
+			this.stack = stackArr.shift()+"\n";
+			this.stack += `    at file:///${file.name}:${file.line}:0`
+			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
+			if (flags.includes("-v") === true) {
+				this.stack += "\nCOMPILER STACK TRACE\n"
+				this.stack += stackArr.join("\n")
+			}
+		}
+	}
 
 	class Instruction {
 		constructor(name, onCall, onScopeEnd) {
@@ -92,21 +114,21 @@ export function main(project) {
 			this.gameVars = {}; // Where game variables(&) in the scope get stored
 			scopes.push(this); // Adding our scope to the scope stack
 		}
-		getCompilerVarList(variable){
+		getCompilerVarList(variable, line){
 			for (let i = scopes.length-1; i > -1; i--){
 				if(scopes[i].compilerVars[variable] !== undefined){
 					return scopes[i].compilerVars
 				}
 			}
-			throw new Error(`Compiler variable "${variable}" is not defined`)
+			throw new MCFSError("User Error", `Compiler variable "${variable}" is not defined`, line)
 		}
-		getGameVarList(variable){
+		getGameVarList(variable, line){
 			for (let i = scopes.length - 1; i > -1; i--) {
 				if (scopes[i].gameVars[variable]) {
 					return scopes[i].gameVars
 				}
 			}
-			throw new Error(`Game variable "${variable}" is not defined`)
+			throw new MCFSError("User Error", `Game "${variable}" is not defined`, line)
 		}
 	}
 
@@ -132,9 +154,9 @@ export function main(project) {
 					case "+":
 						numVal = Number(value);
 						if(isNaN(numVal)){
-							scope.getCompilerVarList(name)[name] += value;
+							scope.getCompilerVarList(name, line)[name] += value;
 						}else{
-							scope.getCompilerVarList(name)[name] += numVal;
+							scope.getCompilerVarList(name, line)[name] += numVal;
 						}
 					break;
 					case "-":
@@ -146,14 +168,14 @@ export function main(project) {
 					case "%":
 					break;
 					default:
-						throw new Error(`Unknown variable operation "${operation}"`);
+						throw new MCFSError("User Error", `Unknown variable operation "${operation}"`, line);
 					break;
 				}
 			break;
 			case "&":
 			break;
 			default:
-				throw new Error(`Unknown variable type "${type}"`);
+				throw new MCFSError("User Error", `Unknown variable type "${type}"`, line);
 			break;
 		}
 	});
@@ -177,6 +199,7 @@ export function main(project) {
 		scope.times = Number(line[1]);
 		mcfunctOutput = "";
 	}, function(scope){
+		// We do it once outside and count lines so debugging works
 		for (let i = 0; i < scope.times; i++) {
 			processInstructionArray(JSON.parse(JSON.stringify(scope.contents)))
 		}
@@ -186,20 +209,21 @@ export function main(project) {
 	// END INSTRUCTION
 	new Instruction("end", (line, scope)=>{
 		if (scopes.length === 0) {
-			throw new Error("\"end\" instruction called while no scope is active");
+			throw new MCFSError("User Error", "\"end\" instruction called while no scope is active", line);
 		}
 		scopes.pop().instruction.onScopeEnd(scope);
 	})
 
 	// Compiling
-	function processInstructionArray(arr) {
+	function processInstructionArray(arr, countTowardsLineCount) {
 		for (let line of arr) {
+			if (countTowardsLineCount) file.line++
 			// Skip comments
 			if (line[0] === "#") continue;
 			// Error on unknown instructions
 			const instruct = instructions[line[0]]
 			if (instruct === undefined){
-				throw new Error(`Uknown instruction "${line[0]}" (${line.join(" ")})`)
+				throw new MCFSError("User Error", `Unknown instruction "${line[0]}"`, line)
 			}
 			// Dont activate scoped or end instructions right away
 			// If its the main file scope (scopes.length!==1) then we are able to just process it now
@@ -248,20 +272,20 @@ export function main(project) {
 		new Scope({onScopeEnd:function(scope){
 			
 		}})
-		processInstructionArray(lexedArray);
+		processInstructionArray(lexedArray, true);
 
 		if (scopes.length > 1) {
-			throw new Error("Unanswered scope instruction");
+			throw new MCFSError("User Error", "Unanswered scope instruction");
 		}
 		if (scopes.length < 1) {
-			throw new Error("Missing file scope (there should be one scope left upon compiling a file)")
+			throw new MCFSError("Compiler Error", "Missing file scope (there should be one scope left upon compiling a file)")
 		}
 		scopes.pop().instruction.onScopeEnd(scopes[scopes.length-1])
 	}
 
 	function compileFile(filePath) {
-		if(fs.existsSync(srcPath+filePath) === false) throw new Error(`Tried to compile nonexistant file (${filePath})`);
-		
+		if(fs.existsSync(srcPath+filePath) === false) throw new MCFSError("User Error", `Tried to compile nonexistant file (${filePath})`);
+		file.name = path.resolve(srcPath+filePath)
 		genMcFunctOutput(lexFile(fs.readFileSync(srcPath + filePath, { encoding: "utf8" })));
 
 		fs.writeFileSync(`${buildPath}functions/${filePath.replace(".mcfs","")}.mcfunction`, mcfunctOutput, "utf-8");

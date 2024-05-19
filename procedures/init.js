@@ -2,7 +2,9 @@ import * as fs from "node:fs";
 import * as crypto from "node:crypto";
 const bhPackFolder = "./" //`${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
-export function main(name, description) {
+export function main(inputs, flags) {
+	const name = inputs[0];
+	const description = inputs[1];
 	if (/^[a-zA-Z0-9_]+$/g.test(name) === false || /^[a-zA-Z0-9_ ]+$/g.test(description) === false) {
 		return console.log("The name may only contain letters a-z, 0-9, and underscores. The description may only contain a-z, 0-9, underscores, and spaces.");
 	}
