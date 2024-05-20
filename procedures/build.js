@@ -88,7 +88,7 @@ export function main(inputs, flags) {
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
-			this.stack += `    at file:///${file.name}:${file.line}:0`
+			this.stack += `    at file://${file.name}:${file.line}:0`
 			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
 			if (flags.includes("-v") === true) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
@@ -144,9 +144,35 @@ export function main(inputs, flags) {
 			case "$":
 				switch(operation){
 					case "=":
+						// Equal: nothing
+						if(value === undefined){
+							throw new MCFSError("User Error", "Cannot set variable to nothing");
+						}
+
+						// Equal: string
+						// TODO: Finsih making this
+						if(value.startsWith("\"")){
+							for(let i = 2; i < value.length; i++){
+								let currentLine = line[i];
+								if(i === 2){
+									currentLine = currentLine.substring(1);
+								}
+								if(i === value.length-1){
+									if(currentLine.endsWith("\"") === false){
+										throw new MCFSError("User Error", "Missing closing quote when defining string");
+									}
+									scope.compilerVars[name] += ` ${currentLine.substring(0, currentLine.length-1)}`;
+								}else{
+									scope.compilerVars[name] += ` ${currentLine}`
+								}
+							}
+							return
+						}
+
+						// Equal: number
 						numVal = Number(value);
 						if(isNaN(numVal)){
-							scope.compilerVars[name] = value;
+							throw new MCFSError("User Error", "Missing quotes when defining string");
 						}else{
 							scope.compilerVars[name] = numVal;
 						}
@@ -160,6 +186,16 @@ export function main(inputs, flags) {
 						}
 					break;
 					case "-":
+						let variable = scope.getCompilerVarList(name, line)[name];
+						if(typeof variable !== "number"){
+							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${variable})`)
+						}
+						numVal = Number(value);
+						if(isNaN(numVal)){
+							scope.getCompilerVarList(name, line)[name] -= value;
+						}else{
+							throw new MCFSError("User Error", `Cannot subtract "${value}" `)
+						}
 					break;
 					case "*":
 					break;

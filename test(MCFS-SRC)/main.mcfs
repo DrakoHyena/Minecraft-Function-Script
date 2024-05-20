@@ -1,11 +1,2 @@
-var $counter = 0;
-repeat 3
-	var $counter + 1;
-	cmd say your money when you go up!! yay!!! $counter;
-end;
-repeat 10
-	var $counter + -1;
-	cmd say OH NO YOURE LOOKSING YOUR MONEYTTT NOOO!!!! $counter;
-end;
-var $counter = 0;
-cmd say its okay ur money is safe now :3 $counter
+var $counter = "a";
+cmd say $counter
