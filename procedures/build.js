@@ -239,9 +239,10 @@ export function main(inputs, flags) {
 
 	// LOG INSTRUCTION
 	new Instruction("log", (line, scope)=>{
-		if(scopes.length === 0){
+		// This isnt needed when todo is completed
+		/*if(line.length === 1){
 			throw new MCFSError("User Error", "Cannot log nothing");
-		}
+		}*/
 
 		let output = "";
 		let outputArr = line.slice(1);
