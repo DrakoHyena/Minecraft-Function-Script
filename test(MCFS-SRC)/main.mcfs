@@ -1,1 +1,8 @@
-log
+log;
+var $variable = "a";
+repeat 5
+	log $variable;
+	var $variable + "b";
+end;
+
+asd

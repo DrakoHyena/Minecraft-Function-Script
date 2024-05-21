@@ -77,7 +77,8 @@ export function main(inputs, flags) {
 	const instructions = {};
 	const scopes = [];
 	const file = {
-		name: "", 
+		path: "",
+		relPath: "",
 		line: 0
 	}
 
@@ -88,7 +89,7 @@ export function main(inputs, flags) {
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
-			this.stack += `    at file://${file.name}:${file.line}:0`
+			this.stack += `    at file://${file.path}:${file.line}:0`
 			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
 			if (flags.includes("-v") === true) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
@@ -165,11 +166,11 @@ export function main(inputs, flags) {
 						}
 					break;
 					case "+":
-						numVal = Number(value);
-						if(isNaN(numVal)){
-							scope.getCompilerVarList(name, line)[name] += value;
+						parsedVal = Number(value);
+						if (isNaN(parsedVal)){
+							scope.getCompilerVarList(name, line)[name] += value.substring(1, value.length-1);
 						}else{
-							scope.getCompilerVarList(name, line)[name] += numVal;
+							scope.getCompilerVarList(name, line)[name] += parsedVal;
 						}
 					break;
 					case "-":
@@ -238,28 +239,23 @@ export function main(inputs, flags) {
 	})
 
 	// LOG INSTRUCTION
+	// TODO: line.line
 	new Instruction("log", (line, scope)=>{
-		// This isnt needed when todo is completed
-		/*if(line.length === 1){
-			throw new MCFSError("User Error", "Cannot log nothing");
-		}*/
-
 		let output = "";
 		let outputArr = line.slice(1);
-		// TODO: Include the line and file path (relative to main.mcfs) to log
 		for (let str of outputArr) {
 			if (str[0] === "$") {
 				str = scope.getCompilerVarList(str.substring(1))[str.substring(1)]
 			}
 			output += str + " "
 		}
-		console.log(output);
+		console.log(`[${file.relPath}][${line.line}] ${output}`);
 	})
 
 	// Compiling
 	function processInstructionArray(arr, countTowardsLineCount) {
 		for (let line of arr) {
-			if (countTowardsLineCount) file.line++
+			//if (countTowardsLineCount) file.line++
 			// Skip comments
 			if (line[0] === "#") continue;
 			// Error on unknown instructions
@@ -289,6 +285,7 @@ export function main(inputs, flags) {
 		// Get the line of code and clean it up
 		for (let i = 0, iStart = 0; i < fileContent.length; i++) {
 			if (fileContent[i] === ";" || fileContent[i] === "\r" || fileContent[i] === "\n" || i === fileContent.length - 1) {
+				file.line++
 				const line = fileContent.substring(
 					iStart, i + (i === fileContent.length - 1 && fileContent[i] !== ";" ? 1 : 0) // We need to go one more index at the end of files if it doesnt end in a ;
 				).trim().replaceAll("\t", "");
@@ -305,6 +302,7 @@ export function main(inputs, flags) {
 					lastSpace = i + 1;
 				}
 			}
+			lineArr.line = file.line;
 			lexedOutput.push(lineArr);
 		}
 		return lexedOutput
@@ -327,7 +325,8 @@ export function main(inputs, flags) {
 
 	function compileFile(filePath) {
 		if(fs.existsSync(srcPath+filePath) === false) throw new MCFSError("User Error", `Tried to compile nonexistant file (${filePath})`);
-		file.name = path.resolve(srcPath+filePath)
+		file.path = path.resolve(srcPath+filePath)
+		file.relPath = filePath
 		genMcFunctOutput(lexFile(fs.readFileSync(srcPath + filePath, { encoding: "utf8" })));
 
 		fs.writeFileSync(`${buildPath}functions/${filePath.replace(".mcfs","")}.mcfunction`, mcfunctOutput, "utf-8");
