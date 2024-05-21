@@ -150,20 +150,22 @@ export function main(inputs, flags) {
 						}
 
 						// Equal: string
-						// TODO: Finsih making this
 						if(value.startsWith("\"")){
-							for(let i = 2; i < value.length; i++){
+							scope.compilerVars[name] = "";
+							for(let i = 3; i < line.length; i++){
 								let currentLine = line[i];
-								if(i === 2){
-									currentLine = currentLine.substring(1);
-								}
-								if(i === value.length-1){
+								if(i === line.length-1){
 									if(currentLine.endsWith("\"") === false){
 										throw new MCFSError("User Error", "Missing closing quote when defining string");
 									}
 									scope.compilerVars[name] += ` ${currentLine.substring(0, currentLine.length-1)}`;
 								}else{
 									scope.compilerVars[name] += ` ${currentLine}`
+								}
+								if (i === 3) {
+									// TODO: Make this work
+									// Remove the starting quote and space
+									currentLine = currentLine.substring(2);
 								}
 							}
 							return

@@ -1,2 +1,2 @@
-var $counter = "a";
+var $counter = "a a a";
 cmd say $counter
