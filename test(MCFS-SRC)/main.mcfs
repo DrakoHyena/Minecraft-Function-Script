@@ -1,4 +1,1 @@
-var $counter = "this is a string";
-cmd say $counter;
-var $counter - 10;
-cmd say $counter;
+log asdasd asd asd

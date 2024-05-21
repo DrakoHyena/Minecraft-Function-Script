@@ -237,6 +237,24 @@ export function main(inputs, flags) {
 		scopes.pop().instruction.onScopeEnd(scope);
 	})
 
+	// LOG INSTRUCTION
+	new Instruction("log", (line, scope)=>{
+		if(scopes.length === 0){
+			throw new MCFSError("User Error", "Cannot log nothing");
+		}
+
+		let output = "";
+		let outputArr = line.slice(1);
+		// TODO: Include the line and file path (relative to main.mcfs) to log
+		for (let str of outputArr) {
+			if (str[0] === "$") {
+				str = scope.getCompilerVarList(str.substring(1))[str.substring(1)]
+			}
+			output += str + " "
+		}
+		console.log(output);
+	})
+
 	// Compiling
 	function processInstructionArray(arr, countTowardsLineCount) {
 		for (let line of arr) {
