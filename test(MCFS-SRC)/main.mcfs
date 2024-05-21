@@ -1,2 +1,4 @@
-var $counter = "a a a";
-cmd say $counter
+var $counter = "this is a string";
+cmd say $counter;
+var $counter - 10;
+cmd say $counter;

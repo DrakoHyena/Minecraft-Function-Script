@@ -139,44 +139,29 @@ export function main(inputs, flags) {
 		const name = line[1].substring(1);
 		const operation = line[2];
 		const value = line[3];
-		let numVal = 0;
+		let parsedVal = 0;
 		switch(type){
 			case "$":
 				switch(operation){
 					case "=":
 						// Equal: nothing
 						if(value === undefined){
-							throw new MCFSError("User Error", "Cannot set variable to nothing");
+							throw new MCFSError("User Error", "Cannot set variable to nothing", line);
 						}
 
 						// Equal: string
-						if(value.startsWith("\"")){
-							scope.compilerVars[name] = "";
-							for(let i = 3; i < line.length; i++){
-								let currentLine = line[i];
-								if(i === line.length-1){
-									if(currentLine.endsWith("\"") === false){
-										throw new MCFSError("User Error", "Missing closing quote when defining string");
-									}
-									scope.compilerVars[name] += ` ${currentLine.substring(0, currentLine.length-1)}`;
-								}else{
-									scope.compilerVars[name] += ` ${currentLine}`
-								}
-								if (i === 3) {
-									// TODO: Make this work
-									// Remove the starting quote and space
-									currentLine = currentLine.substring(2);
-								}
-							}
+						parsedVal = line.slice(3).join(" ");
+						if (parsedVal.startsWith("\"") && parsedVal.endsWith("\"")){
+							scope.compilerVars[name] = parsedVal.substring(1, parsedVal.length-1);
 							return
 						}
 
 						// Equal: number
-						numVal = Number(value);
-						if(isNaN(numVal)){
-							throw new MCFSError("User Error", "Missing quotes when defining string");
+						parsedVal = Number(parsedVal.replaceAll(",", ""));
+						if (isNaN(parsedVal)){
+							throw new MCFSError("User Error", "Missing quotes when defining string", line);
 						}else{
-							scope.compilerVars[name] = numVal;
+							scope.compilerVars[name] = parsedVal;
 						}
 					break;
 					case "+":
@@ -190,13 +175,13 @@ export function main(inputs, flags) {
 					case "-":
 						let variable = scope.getCompilerVarList(name, line)[name];
 						if(typeof variable !== "number"){
-							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${variable})`)
+							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${variable})`, line)
 						}
 						numVal = Number(value);
 						if(isNaN(numVal)){
 							scope.getCompilerVarList(name, line)[name] -= value;
 						}else{
-							throw new MCFSError("User Error", `Cannot subtract "${value}" `)
+							throw new MCFSError("User Error", `Cannot subtract "${value}" `, line)
 						}
 					break;
 					case "*":
