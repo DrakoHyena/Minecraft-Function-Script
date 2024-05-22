@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { generateCommandBlock } from "../mcstructure/coder.js";
 import { pathToFileURL } from "node:url";
+import { escape } from "node:querystring";
 
 const bhPackFolder = "./" //`${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
@@ -79,7 +80,7 @@ export function main(inputs, flags) {
 	const file = {
 		path: "",
 		relPath: "",
-		line: 0
+		line: 1
 	}
 
 	class MCFSError extends Error {
@@ -89,7 +90,7 @@ export function main(inputs, flags) {
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
-			this.stack += `    at file://${file.path}:${file.line}:0`
+			this.stack += `    at ${pathToFileURL(file.path)}:${line.line}:0`
 			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
 			if (flags.includes("-v") === true) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
@@ -225,7 +226,7 @@ export function main(inputs, flags) {
 	}, function(scope){
 		// We do it once outside and count lines so debugging works
 		for (let i = 0; i < scope.times; i++) {
-			processInstructionArray(JSON.parse(JSON.stringify(scope.contents)))
+			processInstructionArray(structuredClone(scope.contents))
 		}
 		mcfunctOutput = scope.storedMcfunctOutput + mcfunctOutput;
 	})
@@ -249,13 +250,14 @@ export function main(inputs, flags) {
 			}
 			output += str + " "
 		}
-		console.log(`[${file.relPath}][${line.line}] ${output}`);
+		if(flags.includes("-v")){
+			console.log(`[${file.relPath}][${line.line}] ${output}`);
+		
 	})
 
 	// Compiling
-	function processInstructionArray(arr, countTowardsLineCount) {
+	function processInstructionArray(arr) {
 		for (let line of arr) {
-			//if (countTowardsLineCount) file.line++
 			// Skip comments
 			if (line[0] === "#") continue;
 			// Error on unknown instructions
@@ -284,12 +286,13 @@ export function main(inputs, flags) {
 
 		// Get the line of code and clean it up
 		for (let i = 0, iStart = 0; i < fileContent.length; i++) {
-			if (fileContent[i] === ";" || fileContent[i] === "\r" || fileContent[i] === "\n" || i === fileContent.length - 1) {
-				file.line++
+			// Detect when we get to a ;, \n, or the end of a file. If its the latter two increment file.line too
+			if (fileContent[i] === ";" || fileContent[i] === "\n" || i === fileContent.length - 1) {
 				const line = fileContent.substring(
 					iStart, i + (i === fileContent.length - 1 && fileContent[i] !== ";" ? 1 : 0) // We need to go one more index at the end of files if it doesnt end in a ;
-				).trim().replaceAll("\t", "");
+				).trim().replaceAll("\t", "").replaceAll("\r", "");
 				if (line !== "") compileLine(line);
+				if(fileContent[i] === "\n" || i === fileContent.length - 1) file.line++
 				iStart = i + 1;
 			}
 		}
