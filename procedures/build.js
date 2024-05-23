@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { generateCommandBlock } from "../mcstructure/coder.js";
+import { genCode } from "../codegen/index.js";
 import { pathToFileURL } from "node:url";
 import { escape } from "node:querystring";
 
@@ -79,18 +80,19 @@ export function main(inputs, flags) {
 	}
 }`	);
 
-	// Make function directory
-	fs.mkdirSync(buildPath+"functions")
+	// Make function and structure directory
+	fs.mkdirSync(buildPath + "functions")
+	fs.mkdirSync(buildPath + "structures")
 
-	// Compile Functions and classes
-	let mcfunctOutput = "";
+
+	// Compiler Functions and classes
 	const instructions = {};
-	const scopes = [];
-	const file = {
-		path: "",
-		relPath: "",
-		line: 1
+	const current = {
+		scope: undefined,
+		file: undefined
 	}
+
+	const files = [];
 
 	class MCFSError extends Error {
 		constructor(type, message, line) {
@@ -99,12 +101,56 @@ export function main(inputs, flags) {
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
-			this.stack += `    at ${pathToFileURL(file.path)}:${line?.line||scopes[scopes.length-1].startingLine}:0`
+			this.stack += `    at ${pathToFileURL(current.file.path)}:${line?.line||current.scope.startingLine}:0`
 			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
 			if (flags.includes("-v") === true) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
 				this.stack += stackArr.join("\n")
 			}
+		}
+	}
+
+	class File {
+		constructor(path, relPath) {
+			// Game
+			this.functionOutput = "";
+			this.outputLines = 0;
+
+			// Compiler
+			this.srcLine = 0;
+			this.path = path;
+			this.relPath = relPath;
+			this.scopes = [];
+
+			files.push(this);
+			current.file = this;
+		}
+	}
+	class Scope {
+		constructor(instruction, startingLine) {
+			this.instruction = instruction; // The instruction associated with the scope, used for instruction.onScopeEnd
+			this.contents = []; // Where instructions inside the scope are stored
+			this.compilerVars = {}; // Where compiler variables ($) in the scope get stored
+			this.gameVars = {}; // Where game variables(&) in the scope get stored
+			this.startingLine = startingLine; // The line where the scope starts, used in errors
+			current.file.scopes.push(this); // Adding our scope to the scope stack
+			current.scope = this;
+		}
+		getCompilerVarList(variable, line) {
+			for (let i = current.file.scopes.length - 1; i > -1; i--) {
+				if (current.file.scopes[i].compilerVars[variable] !== undefined) {
+					return current.file.scopes[i].compilerVars
+				}
+			}
+			throw new MCFSError("User Error", `Compiler variable "${variable}" is not defined`, line)
+		}
+		getGameVarList(variable, line) {
+			for (let i = current.file.scopes.length - 1; i > -1; i--) {
+				if (current.file.scopes[i].gameVars[variable]) {
+					return current.file.scopes[i].gameVars
+				}
+			}
+			throw new MCFSError("User Error", `Game "${variable}" is not defined`, line)
 		}
 	}
 
@@ -115,32 +161,6 @@ export function main(inputs, flags) {
 			this.onScopeEnd = onScopeEnd; // Called when the instruction's scope ends
 			this.onCall = onCall; // Called when the instruction is executed
 			instructions[name] = this; // Making our instruction discoverable
-		}
-	}
-	class Scope {
-		constructor(instruction, startingLine) {
-			this.instruction = instruction; // The instruction associated with the scope, used for instruction.onScopeEnd
-			this.contents = []; // Where instructions inside the scope are stored
-			this.compilerVars = {}; // Where compiler variables ($) in the scope get stored
-			this.gameVars = {}; // Where game variables(&) in the scope get stored
-			this.startingLine = startingLine; // The line where the scope starts, used in errors
-			scopes.push(this); // Adding our scope to the scope stack
-		}
-		getCompilerVarList(variable, line){
-			for (let i = scopes.length-1; i > -1; i--){
-				if(scopes[i].compilerVars[variable] !== undefined){
-					return scopes[i].compilerVars
-				}
-			}
-			throw new MCFSError("User Error", `Compiler variable "${variable}" is not defined`, line)
-		}
-		getGameVarList(variable, line){
-			for (let i = scopes.length - 1; i > -1; i--) {
-				if (scopes[i].gameVars[variable]) {
-					return scopes[i].gameVars
-				}
-			}
-			throw new MCFSError("User Error", `Game "${variable}" is not defined`, line)
 		}
 	}
 
@@ -256,6 +276,7 @@ export function main(inputs, flags) {
 				}
 			break;
 			case "&":
+				throw new MCFSError("Compiler Error", "Game variables not yet implemented", line);
 			break;
 			default:
 				throw new MCFSError("User Error", `Unknown variable type "${type}"`, line);
@@ -271,30 +292,32 @@ export function main(inputs, flags) {
 			if(str[0] === "$"){
 				str = scope.getCompilerVarList(str.substring(1))[str.substring(1)]
 			}
-			mcfunctOutput += str + " "
+			current.file.functionOutput += str + " "
 		}
-		mcfunctOutput += "\n";
+		current.file.functionOutput += "\n";
+		current.file.outputLines++;
 	})
 
 	// REPEAT INSTRUCTION
 	new Instruction("repeat", function(line, scope){
-		scope.storedMcfunctOutput = mcfunctOutput;
+		scope.storedOutput = current.file.functionOutput;
 		scope.times = Number(line[1]);
-		mcfunctOutput = "";
+		current.file.functionOutput = "";
 	}, function(scope){
 		// We do it once outside and count lines so debugging works
 		for (let i = 0; i < scope.times; i++) {
 			processInstructionArray(structuredClone(scope.contents))
 		}
-		mcfunctOutput = scope.storedMcfunctOutput + mcfunctOutput;
+		current.file.functionOutput = scope.storedOutput + current.file.functionOutput;
 	})
 
 	// END INSTRUCTION
 	new Instruction("end", (line, scope)=>{
-		if (scopes.length === 0) {
+		if (current.file.scopes.length === 0) {
 			throw new MCFSError("User Error", "\"end\" instruction called while no scope is active", line);
 		}
-		scopes.pop().instruction.onScopeEnd(scope);
+		current.file.scopes.pop().instruction.onScopeEnd(scope);
+		current.scope = current.file.scopes[current.file.scopes.length-1]
 	})
 
 	// LOG INSTRUCTION
@@ -307,7 +330,7 @@ export function main(inputs, flags) {
 			}
 			output += str + " "
 		}
-		console.log(`[${file.relPath}][${line.line}] ${output}`);
+		console.log(`[${current.file.relPath}][${line.line}] ${output}`);
 	})
 
 	// Compiling
@@ -322,8 +345,8 @@ export function main(inputs, flags) {
 			}
 			// Dont activate scoped or end instructions right away
 			// If its the main file scope (scopes.length!==1) then we are able to just process it now
-			if (scopes.length !== 1 && line[0] !== "end" && !instruct.doesScope) {
-				scopes[scopes.length - 1].contents.push(line);
+			if (current.file.scopes.length !== 1 && line[0] !== "end" && !instruct.doesScope) {
+				current.scope.contents.push(line);
 				continue;
 			}
 			// Activate regular instructions
@@ -331,7 +354,7 @@ export function main(inputs, flags) {
 				if (instruct.doesScope === true) {
 					new Scope(instruct, line.line);
 				}
-				instructions[line[0]].onCall(line, scopes[scopes.length-1]);
+				instructions[line[0]].onCall(line, current.scope);
 			}
 		}
 	}
@@ -341,13 +364,13 @@ export function main(inputs, flags) {
 
 		// Get the line of code and clean it up
 		for (let i = 0, iStart = 0; i < fileContent.length; i++) {
-			// Detect when we get to a ;, \n, or the end of a file. If its the latter two increment file.line too
+			// Detect when we get to a ;, \n, or the end of a file. If its the latter two increment file.srcLine too
 			if (fileContent[i] === ";" || fileContent[i] === "\n" || i === fileContent.length - 1) {
 				const line = fileContent.substring(
 					iStart, i + (i === fileContent.length - 1 && fileContent[i] !== ";" ? 1 : 0) // We need to go one more index at the end of files if it doesnt end in a ;
 				).trim().replaceAll("\t", "").replaceAll("\r", "");
 				if (line !== "") compileLine(line);
-				if(fileContent[i] === "\n" || i === fileContent.length - 1) file.line++
+				if(fileContent[i] === "\n" || i === fileContent.length - 1) current.file.srcLine++
 				iStart = i + 1;
 			}
 		}
@@ -360,34 +383,68 @@ export function main(inputs, flags) {
 					lastSpace = i + 1;
 				}
 			}
-			lineArr.line = file.line;
+			lineArr.line = current.file.srcLine;
 			lexedOutput.push(lineArr);
 		}
 		return lexedOutput
 	}
 
-	function genMcFunctOutput(lexedArray) {
+	function genFunctionOutput(lexedArray) {
 		new Scope({onScopeEnd:function(scope){
 			
 		}})
 		processInstructionArray(lexedArray, true);
 
-		if (scopes.length > 1) {
+		if (current.file.scopes.length > 1) {
 			throw new MCFSError("User Error", "Unanswered scope instruction");
 		}
-		if (scopes.length < 1) {
+		if (current.file.scopes.length < 1) {
 			throw new MCFSError("Compiler Error", "Missing file scope (there should be one scope left upon compiling a file)")
 		}
-		scopes.pop().instruction.onScopeEnd(scopes[scopes.length-1])
+		current.file.scopes.pop().instruction.onScopeEnd(current.scope)
+		current.scope = current.file.scopes[current.file.scopes.length-1];
+		return files.pop();
 	}
 
 	function compileFile(filePath) {
 		if(fs.existsSync(srcPath+filePath) === false) throw new MCFSError("User Error", `Tried to compile nonexistant file (${filePath})`);
-		file.path = path.resolve(srcPath+filePath)
-		file.relPath = filePath
-		genMcFunctOutput(lexFile(fs.readFileSync(srcPath + filePath, { encoding: "utf8" })));
+		new File(path.resolve(srcPath + filePath), filePath)
 
-		fs.writeFileSync(`${buildPath}functions/${filePath.replace(".mcfs","")}.mcfunction`, mcfunctOutput, "utf-8");
+		let file = genFunctionOutput(lexFile(fs.readFileSync(srcPath + filePath, { encoding: "utf8" })));
+		let baseName = filePath.replace(".mcfs", "");
+
+		let lastFile = "";
+		let fileContent = "";
+		let lines = 0;
+		const lineLimit = 9999
+		let iStart = 0;
+		let i = 0;
+		while(i < file.functionOutput.length){
+			// Gather lineLimit amount of lines
+			if(file.functionOutput[i] === "\n"){
+				fileContent += file.functionOutput.substring(iStart, (lines===lineLimit-1 ? i-1 : i));
+				iStart = (lines===lineLimit-1 ? i+1 : i);
+				lines++
+			}
+
+			// When we reach lineLimit or the end of the file
+			if (lines === lineLimit || i === file.functionOutput.length - 1){
+				if(!lastFile){
+					fs.writeFileSync(`${buildPath}functions/${baseName}.mcfunction`, fileContent, "utf8")
+					lastFile = baseName;
+				}else{
+					let name = `${baseName}-${genCode()}`
+					let structureName = genCode();
+					fs.writeFileSync(`${buildPath}functions/${name}.mcfunction`, fileContent, "utf8")
+					fs.writeFileSync(`${buildPath}structures/${structureName}.mcstructure`, generateCommandBlock(`function ${name.substring(2)}`));
+					fs.appendFileSync(`${buildPath}functions/${lastFile}.mcfunction`, `\nstructure load ${structureName} ~ 0 ~`, "utf8")
+					lastFile = name
+				}
+				lines = 0;
+				fileContent = "";
+			}
+			i++
+		}
 	}
 	compileFile("./main.mcfs");
 

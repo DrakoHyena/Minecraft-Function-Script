@@ -1,0 +1,7 @@
+cmd scoreboard objectives remove display
+cmd scoreboard objectives add display dummy
+cmd scoreboard objectives setdisplay sidebar display
+cmd scoreboard players set "counter" display 0
+repeat 35000
+	cmd scoreboard players add "counter" display 1
+end;

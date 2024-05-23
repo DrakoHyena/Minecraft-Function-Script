@@ -1,0 +1,22 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "15k",
+		"description": "testing file linking",
+		"uuid": "5262a5f4-9621-426a-9328-34f7910c802f",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 19, 73]
+	},
+	"modules": [
+		{
+			"description": "testing file linking",
+			"type": "data",
+			"uuid": "bdb412f1-3a10-432e-a6c2-8bc7213791c9",
+			"version": [1, 0, 0]
+		}
+	],
+	"metadata": {
+		"Made with": "MCFS",
+		"MCFS Source": "https://github.com/DrakoHyena/Minecraft-Function-Script"
+	}
+}
