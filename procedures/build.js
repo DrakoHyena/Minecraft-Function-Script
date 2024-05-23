@@ -5,17 +5,26 @@ import { generateCommandBlock } from "../mcstructure/coder.js";
 import { pathToFileURL } from "node:url";
 import { escape } from "node:querystring";
 
-const bhPackFolder = "./" //`${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
+let bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
 export function main(inputs, flags) {
 	const project = inputs[0];
 	const projectSrc = project + "(MCFS-SRC)";
 	const projectBuild = project + "(MCFS-BUILD)";
-	const buildPath = bhPackFolder + projectBuild + "/";
-	const srcPath = bhPackFolder + projectSrc + "/";
+	let buildPath = bhPackFolder + projectBuild + "/";
+	let srcPath = bhPackFolder + projectSrc + "/";
+
+	if(flags.includes("-test")){
+		buildPath = "./tests/build/"+projectBuild+"/";
+		srcPath = "./tests/src/"+projectSrc+"/";
+	}
+	if (flags.includes("-random")){
+		buildPath = "./tests/random/" + projectBuild + "/";
+		srcPath = "./tests/random/" + projectSrc + "/";
+	}
 
 	// Check if source exists
-	if (fs.existsSync(bhPackFolder + projectSrc) === false) {
+	if (fs.existsSync(srcPath) === false){
 		return console.log("Specified project does not exist.")
 	}
 
@@ -90,7 +99,7 @@ export function main(inputs, flags) {
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
-			this.stack += `    at ${pathToFileURL(file.path)}:${line.line}:0`
+			this.stack += `    at ${pathToFileURL(file.path)}:${line?.line||scopes[scopes.length-1].startingLine}:0`
 			if(line) this.stack += `\nLINE IN MCFS FILE\n    ${line.join(" ")}`
 			if (flags.includes("-v") === true) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
@@ -109,11 +118,12 @@ export function main(inputs, flags) {
 		}
 	}
 	class Scope {
-		constructor(instruction) {
+		constructor(instruction, startingLine) {
 			this.instruction = instruction; // The instruction associated with the scope, used for instruction.onScopeEnd
 			this.contents = []; // Where instructions inside the scope are stored
 			this.compilerVars = {}; // Where compiler variables ($) in the scope get stored
 			this.gameVars = {}; // Where game variables(&) in the scope get stored
+			this.startingLine = startingLine; // The line where the scope starts, used in errors
 			scopes.push(this); // Adding our scope to the scope stack
 		}
 		getCompilerVarList(variable, line){
@@ -179,11 +189,11 @@ export function main(inputs, flags) {
 						if(typeof variable !== "number"){
 							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${variable})`, line)
 						}
-						numVal = Number(value);
-						if(isNaN(numVal)){
-							scope.getCompilerVarList(name, line)[name] -= value;
+						parsedVal = Number(value);
+						if (isNaN(parsedVal)){
+							throw new MCFSError("User Error", `Cannot subtract "${value}" from type string`, line)
 						}else{
-							throw new MCFSError("User Error", `Cannot subtract "${value}" `, line)
+							scope.getCompilerVarList(name, line)[name] -= value;
 						}
 					break;
 					case "*":
@@ -240,7 +250,6 @@ export function main(inputs, flags) {
 	})
 
 	// LOG INSTRUCTION
-	// TODO: line.line
 	new Instruction("log", (line, scope)=>{
 		let output = "";
 		let outputArr = line.slice(1);
@@ -250,9 +259,7 @@ export function main(inputs, flags) {
 			}
 			output += str + " "
 		}
-		if(flags.includes("-v")){
-			console.log(`[${file.relPath}][${line.line}] ${output}`);
-		
+		console.log(`[${file.relPath}][${line.line}] ${output}`);
 	})
 
 	// Compiling
@@ -274,7 +281,7 @@ export function main(inputs, flags) {
 			// Activate regular instructions
 			if (instruct) {
 				if (instruct.doesScope === true) {
-					new Scope(instruct);
+					new Scope(instruct, line.line);
 				}
 				instructions[line[0]].onCall(line, scopes[scopes.length-1]);
 			}

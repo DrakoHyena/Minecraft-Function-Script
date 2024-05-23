@@ -35,12 +35,12 @@ async function main() {
 				console.log(`
 				--init
 					arguments: "project name", "project description"
-					flags: none
+					flags: -random -test
 					ex: node cli.js --init "test" "A testing project"
 				--build
 					arguments: "project name"
-					flags: -v
-					ex: node cli.js --build "test" -v
+					flags: -v -random -test
+					ex: node cli.js --build "test"
 				`.replace(/(\n)\s+/g, '$1'))
 			break;
 		} 

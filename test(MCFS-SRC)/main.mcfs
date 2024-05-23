@@ -1,9 +1,0 @@
-log;
-var $variable = "a";
-repeat 5
-	log $variable;
-	var $variable + "b";
-	cmd say $variable;
-end;
-
-asd;

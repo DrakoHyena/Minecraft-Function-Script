@@ -84,3 +84,6 @@ Output:
 	- TODO: Might be REALLY bad for game vars
 - %
 	- Sets the variable to the result of a modulus operation on the variable by the value
+
+### log <value>
+Logs anything in value whether its text, variables, or both in the nodejs console during compile time. Useful for debugging.

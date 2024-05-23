@@ -1,0 +1,16 @@
+# TODO: FINISH MAKING THIS TEST
+# NUMBERS #
+# Setting
+var $counter = 0;
+
+# Adding
+repeat 5
+	var $counter + 1;
+end;
+log $counter should equal 5
+
+# Subtracting
+repeat 10
+	var $counter - 1;
+end;
+log $counter should equal -5;

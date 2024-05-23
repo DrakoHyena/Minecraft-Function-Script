@@ -1,17 +1,17 @@
 {
 	"format_version": 2,
 	"header": {
-		"name": "test",
-		"description": "a test pack",
-		"uuid": "8864d635-38a6-4600-87a1-d1e59e088278",
+		"name": "comp_vars",
+		"description": "Compilier var testing",
+		"uuid": "5daa6f75-09a8-4044-b1d9-3cb724f4241b",
 		"version": [1, 0, 0],
 		"min_engine_version": [1, 19, 73]
 	},
 	"modules": [
 		{
-			"description": "a test pack",
+			"description": "Compilier var testing",
 			"type": "data",
-			"uuid": "57935a81-b306-45fa-b38e-581f0b506262",
+			"uuid": "4646289e-794a-45a9-9ec9-a5322c1bdf05",
 			"version": [1, 0, 0]
 		}
 	],
