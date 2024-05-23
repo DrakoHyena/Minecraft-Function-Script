@@ -79,6 +79,8 @@ Output:
 	- Subtracts the value from the variable
 - \*
 	- Multiplies the variable by the value
+- \\
+	- Divides the variable by the value
 - \^
 	- Exponentiates the variable by the value
 	- TODO: Might be REALLY bad for game vars

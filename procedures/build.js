@@ -151,7 +151,7 @@ export function main(inputs, flags) {
 		const name = line[1].substring(1);
 		const operation = line[2];
 		const value = line[3];
-		let parsedVal = 0;
+		let tempVar = 0;
 		switch(type){
 			case "$":
 				switch(operation){
@@ -162,45 +162,93 @@ export function main(inputs, flags) {
 						}
 
 						// Equal: string
-						parsedVal = line.slice(3).join(" ");
-						if (parsedVal.startsWith("\"") && parsedVal.endsWith("\"")){
-							scope.compilerVars[name] = parsedVal.substring(1, parsedVal.length-1);
+						tempVar = line.slice(3).join(" ");
+						if (tempVar.startsWith("\"") && tempVar.endsWith("\"")){
+							scope.compilerVars[name] = tempVar.substring(1, tempVar.length-1);
 							return
 						}
 
 						// Equal: number
-						parsedVal = Number(parsedVal.replaceAll(",", ""));
-						if (isNaN(parsedVal)){
+						tempVar = Number(tempVar.replaceAll(",", ""));
+						if (isNaN(tempVar)){
 							throw new MCFSError("User Error", "Missing quotes when defining string", line);
 						}else{
-							scope.compilerVars[name] = parsedVal;
+							scope.compilerVars[name] = tempVar;
 						}
 					break;
 					case "+":
-						parsedVal = Number(value);
-						if (isNaN(parsedVal)){
-							scope.getCompilerVarList(name, line)[name] += value.substring(1, value.length-1);
-						}else{
-							scope.getCompilerVarList(name, line)[name] += parsedVal;
+						tempVar = Number(value);
+						if (isNaN(tempVar)){
+							// Add: variable
+							if (value[0] === "$"){
+								tempVar = value.substring(1);
+								scope.getCompilerVarList(name, line)[name] += scope.getCompilerVarList(tempVar, line)[tempVar]
+							}else{ // Add: string
+								scope.getCompilerVarList(name, line)[name] += value.substring(1, value.length - 1);
+							}
+						}else{ // Add: number
+							scope.getCompilerVarList(name, line)[name] += tempVar;
 						}
 					break;
 					case "-":
-						let variable = scope.getCompilerVarList(name, line)[name];
-						if(typeof variable !== "number"){
-							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${variable})`, line)
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number"){
+							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${tempVar})`, line)
 						}
-						parsedVal = Number(value);
-						if (isNaN(parsedVal)){
-							throw new MCFSError("User Error", `Cannot subtract "${value}" from type string`, line)
+						tempVar = Number(value);
+						if (isNaN(tempVar)){
+							throw new MCFSError("User Error", `Attempted to subtract using a non-numeric value (${value})`, line)
 						}else{
 							scope.getCompilerVarList(name, line)[name] -= value;
 						}
 					break;
 					case "*":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to multiply a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to multiply using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] *= value;
+						}
+					break;
+					case "/":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to divide a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to divide using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] /= value;
+						}
 					break;
 					case "^":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to exponentiate a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to exponentiate using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] **= value;
+						}
 					break;
 					case "%":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to modulate a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to modulate using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] %= value;
+						}
 					break;
 					default:
 						throw new MCFSError("User Error", `Unknown variable operation "${operation}"`, line);

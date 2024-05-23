@@ -1,4 +1,3 @@
-# TODO: FINISH MAKING THIS TEST
 # NUMBERS #
 # Setting
 var $counter = 0;
@@ -7,10 +6,41 @@ var $counter = 0;
 repeat 5
 	var $counter + 1;
 end;
-log $counter should equal 5
+log $counter = 5 (+);
 
 # Subtracting
 repeat 10
 	var $counter - 1;
 end;
-log $counter should equal -5;
+log $counter = -5 (-);
+
+# Multiplication
+repeat 3
+	var $counter * -2;
+end;
+log $counter = 40 (*);
+
+# Division
+repeat 3
+	var $counter / 2;
+end;
+log $counter = 5 (/);
+
+# Exponentiation
+var $counter ^ 2;
+log $counter = 25 (^);
+
+# Modulation
+var $counter % 5;
+log $counter = 0 (%);
+
+# STRINGS #
+var $str = "-2,-1,0"
+
+# Appending
+repeat 5
+	var $counter + 1;
+	var $str + ",";
+	var $str + $counter;
+end;
+log $str = -2,-1,0,1,2,3,4,5;
