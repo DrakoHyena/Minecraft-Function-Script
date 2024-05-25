@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { generateCommandBlock } from "../mcstructure/coder.js";
 import { genCode } from "../codegen/index.js";
 import { pathToFileURL } from "node:url";
+import { get } from "node:http";
 
 let bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
@@ -35,10 +36,12 @@ export function main(inputs, flags) {
 	fs.mkdirSync(buildPath)
 
 	// Write !!READ_ME!!.txt
-	fs.writeFileSync(buildPath + "!!READ_ME!!.txt", "## WARNING\nMODIFICATIONS TO ANYTHING IN THIS FOLDER *WILL* BE LOST. TO MAKE CHANGES PLEASE EDIT THE SRC FOLDER.\n\n## INFO\nThis behavior pack was generated using Minecraft Function Script (MCFS). Learn more about the project at https://github.com/DrakoHyena/Minecraft-Function-Script", "utf8")
+	fs.writeFileSync(buildPath + "!!READ_ME!!.txt", "## WARNING\nMODIFICATIONS TO ANYTHING IN THIS FOLDER *WILL* BE LOST. TO MAKE CHANGES PLEASE EDIT THE SRC FOLDER.\n\n## INFO\nThis behavior pack was generated using Minecraft Function Script (MCFS). Learn more about the project at https://github.com/DrakoHyena/Minecraft-Function-Script\n\n## Removing an MCFS pack from your world\nTo remove an MCFS pack from your world simiply run the following in the following:\n/function mcfs-remove-<packname>-<gibberish>\nWhere pack name is the pack you're removing and gibberish is just some letters or number that follow the pack name, you should see it in the auto complete.\nThis will stop the pack from running and remove all scoreboards associated with the pack making clean up quick and easy!", "utf8")
 
 	// Write manifest.json
 	const projectDetails = {
+		mcfsVersion: null,
+		projectCode: null,
 		name: null,
 		description: null,
 		headerUUID: null,
@@ -50,10 +53,12 @@ export function main(inputs, flags) {
 	}
 	let metadata = fs.readFileSync(srcPath + "metadata", { encoding: "utf8" });
 	metadata = metadata.split(";");
-	projectDetails.name = metadata[0];
-	projectDetails.description = metadata[1];
-	projectDetails.headerUUID = metadata[2];
-	projectDetails.moduleUUID = metadata[3];
+	projectDetails.mcfsVersion = metadata[0];
+	projectDetails.projectCode = metadata[1];
+	projectDetails.name = metadata[2];
+	projectDetails.description = metadata[3];
+	projectDetails.headerUUID = metadata[4];
+	projectDetails.moduleUUID = metadata[5];
 
 	// manifest.json
 	fs.writeFileSync(buildPath + "manifest.json", `{
@@ -81,8 +86,34 @@ export function main(inputs, flags) {
 
 	// Make function and structure directory
 	fs.mkdirSync(buildPath + "functions")
-	fs.mkdirSync(buildPath + "structures")
+	fs.mkdirSync(buildPath + "structures");
 
+	// Make the init and removal function
+	(()=>{
+		let nameBase = `mcfs-${projectDetails.name}-${projectDetails.projectCode}`
+		let initFunctionRunName = `${nameBase}-run_init`
+		let initFunctionRunContent = ""
+		initFunctionRunContent += "tickingarea add circle 0 -64 0 4 mcfs_loader true\n"
+		initFunctionRunContent += `scoreboard objectives add ${nameBase}-vars dummy\n`
+		initFunctionRunContent += `scoreboard players set init ${nameBase} 1\n`
+
+		let initFunctionTestName = `${nameBase}-test_init`
+		let initFunctionTestContent = ""
+		initFunctionTestContent += `scoreboard objectives add ${nameBase} dummy\n`
+		initFunctionTestContent += `scoreboard players add init ${nameBase} 0\n`
+		initFunctionTestContent += `execute if score init ${nameBase} matches 0 run function ${initFunctionRunName}\n`
+
+		// Make removal funtion
+		let removalFunctionName = `mcfs-remove-${projectDetails.name}-${projectDetails.projectCode}`
+		let removalFunctionContent = `scoreboard objectives remove ${nameBase}-vars\n`
+		removalFunctionContent += `scoreboard players set init ${nameBase} -1\n`
+		removalFunctionContent += `say ${projectDetails.name} has largely been removed. Make sure to remove any command blocks refrencing it then remove the pack from the world. Certain MCFS components that are required for MCFS to work will still remain such as certain scoreboards or tickingareas.`
+
+		fs.writeFileSync(`${buildPath}functions/${initFunctionRunName}.mcfunction`, initFunctionRunContent, "utf8");
+		fs.writeFileSync(`${buildPath}functions/${initFunctionTestName}.mcfunction`, initFunctionTestContent, "utf8");
+		fs.writeFileSync(`${buildPath}functions/${removalFunctionName}.mcfunction`, removalFunctionContent, "utf8");
+		fs.writeFileSync(`${buildPath}functions/tick.json`, JSON.stringify({values:[initFunctionTestName]}), "utf8");
+	})()
 
 	// Compiler Functions and classes
 	const instructions = {};
@@ -91,7 +122,7 @@ export function main(inputs, flags) {
 		file: undefined
 	}
 	const log = {
-		content: `[${(new Date).toLocaleString()}] Building:  ${projectDetails.name}\n`,
+		content: `[${(new Date).toLocaleString()}] Building: ${projectDetails.name}\n`,
 		warnings: 0
 	}
 	log.write = function() {
@@ -104,6 +135,7 @@ export function main(inputs, flags) {
 	}
 
 	const files = [];
+	const gameVarScoreboard = `mcfs-${projectDetails.name}-${projectDetails.projectCode}-vars`
 
 	class MCFSError extends Error {
 		constructor(type, message, line) {
@@ -121,7 +153,7 @@ export function main(inputs, flags) {
 			}
 
 			// Write the logs
-
+			log.write()
 		}
 	}
 
@@ -188,12 +220,13 @@ export function main(inputs, flags) {
 		const value = line[3];
 		let tempVar = 0;
 		switch(type){
+			// Compiler variables
 			case "$":
 				switch(operation){
 					case "=":
 						// Equal: nothing
 						if(value === undefined){
-							throw new MCFSError("User Error", "Cannot set variable to nothing", line);
+							throw new MCFSError("User Error", "Cannot set a compiler variable to nothing", line);
 						}
 
 						// Equal: string
@@ -290,8 +323,105 @@ export function main(inputs, flags) {
 					break;
 				}
 			break;
-			case "&":
-				throw new MCFSError("Compiler Error", "Game variables not yet implemented", line);
+			// Game variables
+			case "&": // TODO: Finish game variables
+				// TODO: Make it so variables are assigned to a list so they can be resued
+				switch (operation) {
+					case "=":
+						// Equal: nothing
+						if (value === undefined) {
+							throw new MCFSError("User Error", "Cannot set a game variable to nothing", line);
+						}
+
+						tempVar = Number(line.slice(3).join(" ").replaceAll(",", ""));
+						if (isNaN(tempVar)) { // Equal: string
+							throw new MCFSError("User Error", "Game variables can only be numbers", line);
+						} else {// Equal: number
+							if (tempVar > 2147483647) throw new MCFSError("User Error", "Game variables cannot be higher than 2147483647")
+							if (tempVar < -2147483648) throw new MCFSError("User Error", "Game variables cannot be lower than -2147483648")
+							scope.gameVars[name] = tempVar;
+							current.file.functionOutput += `scoreboard players set ${name} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.outputLines++;
+						}
+						break;
+					case "+":
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							// Add: variable
+							if (value[0] === "$") {
+								tempVar = value.substring(1);
+								scope.getCompilerVarList(name, line)[name] += scope.getCompilerVarList(tempVar, line)[tempVar]
+							} else { // Add: string
+								scope.getCompilerVarList(name, line)[name] += value.substring(1, value.length - 1);
+							}
+						} else { // Add: number
+							scope.getCompilerVarList(name, line)[name] += tempVar;
+						}
+						break;
+					case "-":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${tempVar})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to subtract using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] -= value;
+						}
+						break;
+					case "*":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to multiply a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to multiply using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] *= value;
+						}
+						break;
+					case "/":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to divide a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to divide using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] /= value;
+						}
+						break;
+					case "^":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to exponentiate a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to exponentiate using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] **= value;
+						}
+						break;
+					case "%":
+						tempVar = scope.getCompilerVarList(name, line)[name];
+						if (typeof tempVar !== "number") {
+							throw new MCFSError("User Error", `Attempted to modulate a non-numeric variable (${name}: ${variable})`, line)
+						}
+						tempVar = Number(value);
+						if (isNaN(tempVar)) {
+							throw new MCFSError("User Error", `Attempted to modulate using a non-numeric value (${value})`, line)
+						} else {
+							scope.getCompilerVarList(name, line)[name] %= value;
+						}
+						break;
+					default:
+						throw new MCFSError("User Error", `Unknown variable operation "${operation}"`, line);
+						break;
+				}
 			break;
 			default:
 				throw new MCFSError("User Error", `Unknown variable type "${type}"`, line);
@@ -335,6 +465,13 @@ export function main(inputs, flags) {
 		}
 		current.file.scopes.pop().instruction.onScopeEnd(scope);
 		current.scope = current.file.scopes[current.file.scopes.length-1]
+	})
+
+	// DEFFFUNCT INSTRUCTION
+	new Instruction("deffunct", (line, scope)=>{
+
+	}, function(scope){
+		
 	})
 
 	// LOG INSTRUCTION
@@ -443,7 +580,6 @@ export function main(inputs, flags) {
 				iStart = (lines===lineLimit-1 ? i+1 : i);
 				lines++
 			}
-
 			// When we reach lineLimit or the end of the file
 			if (lines === lineLimit || i === file.functionOutput.length - 1){
 				if(!lastFile){
@@ -454,7 +590,7 @@ export function main(inputs, flags) {
 					let structureName = genCode();
 					fs.writeFileSync(`${buildPath}functions/${name}.mcfunction`, fileContent, "utf8")
 					fs.writeFileSync(`${buildPath}structures/${structureName}.mcstructure`, generateCommandBlock(`function ${name.substring(2)}`));
-					fs.appendFileSync(`${buildPath}functions/${lastFile}.mcfunction`, `\nstructure load ${structureName} ~ 0 ~`, "utf8")
+					fs.appendFileSync(`${buildPath}functions/${lastFile}.mcfunction`, `\nstructure load ${structureName} ~ -64 ~`, "utf8")
 					lastFile = name
 				}
 				lines = 0;

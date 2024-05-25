@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as crypto from "node:crypto";
+import { genCode } from "../codegen/index.js";
 let bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
 export function main(inputs, flags) {
@@ -25,7 +26,7 @@ export function main(inputs, flags) {
 		})
 
 		// Make main file
-		fs.writeFileSync(bhPackFolder + folderName + "/metadata", `${name};${description};${crypto.randomUUID()};${crypto.randomUUID()}`)
+		fs.writeFileSync(bhPackFolder + folderName + "/metadata", `1.0.0;${genCode()};${name};${description};${crypto.randomUUID()};${crypto.randomUUID()}`)
 		fs.writeFileSync(bhPackFolder + folderName + "/main.mcfs", `# Code below...`)
 	}
 }

@@ -1,17 +1,17 @@
 {
 	"format_version": 2,
 	"header": {
-		"name": "comp_vars",
-		"description": "Compilier var testing",
-		"uuid": "5daa6f75-09a8-4044-b1d9-3cb724f4241b",
+		"name": "game_vars",
+		"description": "Testing game variables",
+		"uuid": "36eb93f4-91e0-4f70-aeb9-ce9c979c35ae",
 		"version": [1, 0, 0],
 		"min_engine_version": [1, 19, 73]
 	},
 	"modules": [
 		{
-			"description": "Compilier var testing",
+			"description": "Testing game variables",
 			"type": "data",
-			"uuid": "4646289e-794a-45a9-9ec9-a5322c1bdf05",
+			"uuid": "b1af9b5b-56c6-47ba-8083-8012b114e761",
 			"version": [1, 0, 0]
 		}
 	],

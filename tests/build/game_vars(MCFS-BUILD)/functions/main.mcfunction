@@ -1,0 +1,1 @@
+scoreboard players set gamevar mcfs-game_vars-e04322-vars 0
