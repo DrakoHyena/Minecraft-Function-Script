@@ -4,7 +4,6 @@ import * as path from "node:path";
 import { generateCommandBlock } from "../mcstructure/coder.js";
 import { genCode } from "../codegen/index.js";
 import { pathToFileURL } from "node:url";
-import { escape } from "node:querystring";
 
 let bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
@@ -91,6 +90,18 @@ export function main(inputs, flags) {
 		scope: undefined,
 		file: undefined
 	}
+	const log = {
+		content: `[${(new Date).toLocaleString()}] Building:  ${projectDetails.name}\n`,
+		warnings: 0
+	}
+	log.write = function() {
+		if (fs.existsSync(buildPath)) {
+			fs.writeFileSync(buildPath + "build_log.txt", log.content, "utf8")
+			console.log(`Build logs written to build_log.txt\n- Warnings: ${log.warnings}`)
+		}else{
+			console.log("Failed to write build logs due to the buildPath not existing");
+		}
+	}
 
 	const files = [];
 
@@ -98,6 +109,7 @@ export function main(inputs, flags) {
 		constructor(type, message, line) {
 			super(message);
 
+			// Set up the error
 			this.name = type;
 			const stackArr = this.stack.split("\n");
 			this.stack = stackArr.shift()+"\n";
@@ -107,6 +119,9 @@ export function main(inputs, flags) {
 				this.stack += "\nCOMPILER STACK TRACE\n"
 				this.stack += stackArr.join("\n")
 			}
+
+			// Write the logs
+
 		}
 	}
 
@@ -287,7 +302,9 @@ export function main(inputs, flags) {
 	// CMD INSTRUCTION
 	new Instruction("cmd", (line, scope)=>{
 		line.shift();
-		
+		if(line[0] === "function"){
+			throw new MCFSError("User Error", "Functions cannot be called using the cmd instruction. Use callexternalfunct instead. Read the callexternalfunct section in the docs to learn more.")
+		}
 		for(let str of line){
 			if(str[0] === "$"){
 				str = scope.getCompilerVarList(str.substring(1))[str.substring(1)]
@@ -449,5 +466,6 @@ export function main(inputs, flags) {
 	compileFile("./main.mcfs");
 
 	// Finish
-	console.log("Building finished.")
+	console.log("Building finished")
+	log.write()
 }

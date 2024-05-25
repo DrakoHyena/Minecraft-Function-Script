@@ -1,17 +1,17 @@
 {
 	"format_version": 2,
 	"header": {
-		"name": "15k",
-		"description": "testing file linking",
-		"uuid": "5262a5f4-9621-426a-9328-34f7910c802f",
+		"name": "imports",
+		"description": "Imports test",
+		"uuid": "daf3deed-2bb2-4a7e-9633-ff7ff358deba",
 		"version": [1, 0, 0],
 		"min_engine_version": [1, 19, 73]
 	},
 	"modules": [
 		{
-			"description": "testing file linking",
+			"description": "Imports test",
 			"type": "data",
-			"uuid": "bdb412f1-3a10-432e-a6c2-8bc7213791c9",
+			"uuid": "93be54ee-bcc0-47d5-858f-521e1b932281",
 			"version": [1, 0, 0]
 		}
 	],

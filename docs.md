@@ -89,3 +89,100 @@ Output:
 
 ### log <value>
 Logs anything in value whether its text, variables, or both in the nodejs console during compile time. Useful for debugging.
+
+### deffunct `<name> <type><param1> <type><param2> ... <type><paramN>`
+Creates a function that can be called elsewhere in the same scope.
+```mcfs
+function spawnGeralds $amount
+	var &pigcount = 0;
+	repeat $amount
+		var $pigcount + 1;
+		cmd summon pig Gerald;
+	end
+	cmd tellraw @a [{"score": &pigamount}, {"text": " Geralds(s) have been summoned"}]
+end
+```
+
+### callfunct `<name> <var1> <var2> ... <varN>`
+Call the specified function with the provided parameters. Each parameter must match the defined parameter's type. If an inputted value isn't a variable (like a string or number) it will be treated as a $ variable. See below for examples.
+Example 1 (works):
+```mcfs
+var $spawnAmount = 10;
+callfunct spawnGeralds $spawnAmount
+
+# this also works because the parameter is a $ type
+callfunct spawnGeralds 10
+```
+Example 2 (errors):
+```
+# This works
+var &score = 100;
+callfunct isHighscore &score
+
+# This doesnt work because a & variable is expected but it gets "10" as a $ variable instead
+callfunct isHighscore 10;
+``` 
+
+## callexternalfunct `<name>`
+Calls the specified function via minecraft's function command. The reason this cannot be done with the cmd instruction is due to the 10,000 command limit per function. Rather than calling the function inside the mcfunction file, this will spawn in a command block which will call the function. While this does introduce a delay of 1 tick, it ensures you can use other functions from other packs and have your code work as intended.
+
+### exportfunct `<function name> <(optional) export name>`
+Allows other mcfs files to import the specified function as the export name so they can use it. If no export name is defined it will become the function name.There are two major things to note: exportfunct must be called in the same scope as the function you are trying to export, a function cannot be exported if it makes use of a variable from another scope, and lastly, a file (file1) cannot import another file (file2) if the other file (file2) also imports the first file (file1) (i.e. circular imports are not allowed). Examples are shown under importfunct.
+
+### importfunct `<filepath relative to main.mcfs> <export name>`
+Import an exported function from another mcfs file.
+Example 1 (works):
+a.mcfs:
+```mcfs
+deffunct spawnLarrys $amount
+	repeat $amount
+		cmd summon chicken Larry;
+	end;
+end;
+exportfunct spawnLarrys
+```
+b.mcfs:
+```mcfs
+importfunct ./a.mcfs spawnLarrys;
+callfunct spawnLarrys 5;
+```
+Example 2 (works):
+a.mcfs:
+```mcfs
+deffunct spawnGerald
+	cmd summon pig Larry;
+end;
+exportfunct spawnGerald summonPig;
+```
+b.mcfs:
+```mcfs
+importfunct ./a.mcfs summonPig;
+callfunct summonPig;
+```
+Example 3 (errors):
+a.mcfs:
+```mcfs
+# Notice how $message is defined outside of announceMessage and then used inside of that function
+var $message = "Rah!!";
+deffunct announceMessage
+	cmd say $message
+end;
+exportfunct announceMessage;
+```
+Example 4 (errors):
+a.mcfs:
+```mcfs
+# Notice how b is required in a
+importfunct ./b.mcfs bar;
+deffunct foo
+end;
+exportfunct foo;
+```
+b.mcfs:
+```mcfs
+# and how a is required in b
+importfunct ./a.mcfs foo;
+deffunct bar
+end;
+exportfunct bar;
+```
