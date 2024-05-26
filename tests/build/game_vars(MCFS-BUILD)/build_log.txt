@@ -1,1 +1,2 @@
-[5/25/2024, 5:17:15 PM] Building: game_vars
+[5/26/2024, 12:49:15 AM] Building: game_vars
+[5/26/2024, 12:49:15 AM] Building finished

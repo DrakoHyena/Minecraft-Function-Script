@@ -1,1 +1,1 @@
-var &gamevar = 0;
+var &gamevar = 10;
