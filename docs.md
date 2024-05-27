@@ -77,7 +77,7 @@ The operations for compiler variables are limited to basic arithmetic.
 - %
 	- Sets the variable to the result of a modulus operation on the variable by the value
 - `round <up/down/auto>`
-	- Rounds the variable up or down
+	- Rounds the variable up, down, or what ever its closest to
 
 
 ##### & (Game variables)

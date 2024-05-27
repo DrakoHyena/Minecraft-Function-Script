@@ -1,3 +1,4 @@
-var $compvar = 1.1;
-var $compvar round auto;
-var &gamevar = $compvar;
+var &smth = 0;
+repeat 5
+	var &smth + 1
+end
