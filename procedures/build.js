@@ -38,6 +38,9 @@ export function main(inputs, flags) {
 	// Write !!READ_ME!!.txt
 	fs.writeFileSync(buildPath + "!!READ_ME!!.txt", "## WARNING\nMODIFICATIONS TO ANYTHING IN THIS FOLDER *WILL* BE LOST. TO MAKE CHANGES PLEASE EDIT THE SRC FOLDER.\n\n## INFO\nThis behavior pack was generated using Minecraft Function Script (MCFS). Learn more about the project at https://github.com/DrakoHyena/Minecraft-Function-Script\n\n## Removing an MCFS pack from your world\nTo remove an MCFS pack from your world simiply run the following in the following:\n/function mcfs-remove-<packname>-<gibberish>\nWhere pack name is the pack you're removing and gibberish is just some letters or number that follow the pack name, you should see it in the auto complete.\nThis will stop the pack from running and remove all scoreboards associated with the pack making clean up quick and easy!", "utf8")
 
+	// Copy pack.png
+	fs.writeFileSync(buildPath+"pack.png", fs.readFileSync("./pack.png"))
+
 	// Write manifest.json
 	const projectDetails = {
 		mcfsVersion: null,
@@ -182,24 +185,25 @@ export function main(inputs, flags) {
 		constructor(instruction, startingLine) {
 			this.instruction = instruction; // The instruction associated with the scope, used for instruction.onScopeEnd
 			this.contents = []; // Where instructions inside the scope are stored
-			this.compilerVars = {}; // Where compiler variables ($) in the scope get stored
+			this.collectInstructions = true; // Whether or not we should collect instructions instead of running them
+			this.compVars = {}; // Where compiler variables ($) in the scope get stored
 			this.gameVars = {}; // Where game variables(&) in the scope get stored
 			this.startingLine = startingLine; // The line where the scope starts, used in errors
 			current.file.scopes.push(this); // Adding our scope to the scope stack
 			current.scope = this;
 		}
-		setCompilerVar(name, value, line){
+		setCompVar(name, value, line){
 			for (let i = current.file.scopes.length - 1; i > -1; i--) {
-				if (current.file.scopes[i].compilerVars[name] !== undefined) {
-					return current.file.scopes[i].compilerVars[name] = value
+				if (current.file.scopes[i].compVars[name] !== undefined) {
+					return current.file.scopes[i].compVars[name] = value
 				}
 			}
-			this.compilerVars[name] = value;
+			this.compVars[name] = value;
 		}
-		getCompilerVar(name, line) {
+		getCompVar(name, line) {
 			for (let i = current.file.scopes.length - 1; i > -1; i--) {
-				if (current.file.scopes[i].compilerVars[name] !== undefined) {
-					return current.file.scopes[i].compilerVars[name]
+				if (current.file.scopes[i].compVars[name] !== undefined) {
+					return current.file.scopes[i].compVars[name]
 				}
 			}
 			throw new MCFSError("User Error", `Compiler variable "${name}" is not defined`, line)
@@ -224,16 +228,21 @@ export function main(inputs, flags) {
 					break;
 				}
 			}
-			if (gameVarsIndex === undefined) gameVarsIndex = gameVarList.push({ inUse: true, value: value, scoreboardName: `var${gameVarList.length}` })-1;
+			if (gameVarsIndex === undefined) gameVarsIndex = gameVarList.push({ inUse: true, value: value, entryName: `var${gameVarList.length}` })-1;
 			return this.gameVars[name] = gameVarList[gameVarsIndex];
 		}
 		getGameVar(name, line) {
 			for (let i = current.file.scopes.length - 1; i > -1; i--) {
 				if (current.file.scopes[i].gameVars[name] !== undefined) {
-					return current.file.scopes[i].gameVars[name].value
+					return current.file.scopes[i].gameVars[name]
 				}
 			}
 			throw new MCFSError("User Error", `Game "${name}" is not defined`, line)
+		}
+		discard(){
+			for(let gVar in this.gameVars){
+				this.gameVars[gVar].inUse = false
+			}
 		}
 	}
 
@@ -270,10 +279,15 @@ export function main(inputs, flags) {
 							throw new MCFSError("User Error", "Compiler variables cannot be set to scoreboard values")
 						}
 
+						// Equal: game variable
+						if(line[3].startsWith("$")){
+							throw new MCFSError("User Error", "Compiler variables cannot be set to game variables")
+						}
+
 						// Equal: string
 						tempVar = line.slice(3).join(" ");
 						if (tempVar.startsWith("\"") && tempVar.endsWith("\"")){
-							scope.compilerVars[name] = tempVar.substring(1, tempVar.length-1);
+							scope.setCompVar(name, tempVar.substring(1, tempVar.length-1), line);
 							return
 						}
 
@@ -282,7 +296,7 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)){
 							throw new MCFSError("User Error", "Missing quotes when defining string", line);
 						}else{
-							scope.compilerVars[name] = tempVar;
+							scope.setCompVar(name, tempVar, line)
 						}
 					break;
 					case "+":
@@ -291,22 +305,22 @@ export function main(inputs, flags) {
 							// Add: variable
 							if (value[0] === "$"){
 								tempVar = value.substring(1);
-								scope.setCompilerVar(name,
-									scope.getCompilerVar(name, line) + scope.getCompilerVar(tempVar, line),
+								scope.setCompVar(name,
+									scope.getCompVar(name, line) + scope.getCompVar(tempVar, line),
 								line)
 							}else{ // Add: string
-								scope.setCompilerVar(name,
-									scope.getCompilerVar(name, line) + value.substring(1, value.length - 1),
+								scope.setCompVar(name,
+									scope.getCompVar(name, line) + value.substring(1, value.length - 1),
 								line)
 							}
 						}else{ // Add: number
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) + tempVar,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) + tempVar,
 							line)
 						}
 					break;
 					case "-":
-						tempVar = scope.getCompilerVar(name, line);
+						tempVar = scope.getCompVar(name, line);
 						if (typeof tempVar !== "number"){
 							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${tempVar})`, line)
 						}
@@ -314,13 +328,13 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)){
 							throw new MCFSError("User Error", `Attempted to subtract using a non-numeric value (${value})`, line)
 						}else{
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) - value,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) - value,
 							line)
 						}
 					break;
 					case "*":
-						tempVar = scope.getCompilerVar(name, line);
+						tempVar = scope.getCompVar(name, line);
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to multiply a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -328,12 +342,12 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to multiply using a non-numeric value (${value})`, line)
 						} else {
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) * value,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) * value,
 							line)						}
 					break;
 					case "/":
-						tempVar = scope.getCompilerVar(name, line);
+						tempVar = scope.getCompVar(name, line);
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to divide a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -341,13 +355,13 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to divide using a non-numeric value (${value})`, line)
 						} else {
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) / value,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) / value,
 							line)
 						}
 					break;
 					case "^":
-						tempVar = scope.getCompilerVar(name, line);
+						tempVar = scope.getCompVar(name, line);
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to exponentiate a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -355,13 +369,13 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to exponentiate using a non-numeric value (${value})`, line)
 						} else {
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) ** value,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) ** value,
 							line)
 						}
 					break;
 					case "%":
-						tempVar = scope.getCompilerVar(name, line);
+						tempVar = scope.getCompVar(name, line);
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to modulate a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -369,9 +383,21 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to modulate using a non-numeric value (${value})`, line)
 						} else {
-							scope.setCompilerVar(name,
-								scope.getCompilerVar(name, line) % value,
+							scope.setCompVar(name,
+								scope.getCompVar(name, line) % value,
 							line)
+						}
+					break;
+					case "round":
+						tempVar = scope.getCompVar(name, line)
+						if(line[3] === "up"){
+							scope.setCompVar(name, Math.ceil(tempVar), line);
+						}else if(line[3] === "down"){
+							scope.setCompVar(name, Math.floor(tempVar), line);
+						}else if(line[3] === "auto"){
+							scope.setCompVar(name, Math.round(tempVar), line);
+						}else{
+							throw new MCFSError("User Error", `"${line[3]}" is not a valid round option`);
 						}
 					break;
 					default:
@@ -388,7 +414,7 @@ export function main(inputs, flags) {
 							throw new MCFSError("User Error", "Cannot set a game variable to nothing", line);
 						}
 
-						// Equal: another scoreboard value
+						// Equal: scoreboard value
 						if(line[3] === "scoreboard"){
 							if(line[4] === undefined || line[5] === undefined){
 								throw new MCFSError("User Error", "Missing player or scoreboard when setting a game variable to a scoreboard")
@@ -398,14 +424,42 @@ export function main(inputs, flags) {
 							return;
 						}
 
+						// Equal: compiler variable
+						if (line[3].startsWith("$")) {
+							tempVar = Number(scope.getCompVar(value.substring(1), line));
+							if(isNaN(tempVar)){
+								throw new MCFSError("User Error", "Tried to set game variable to compiler variable but the compiler variable was a string")
+							}
+							if(tempVar - Math.floor(tempVar) !== 0){
+								throw new MCFSError("User Error", "Tried to set a game variable to a compiler variable but the compiler variable had decimals")
+							}
+
+							scope.setGameVar(name, tempVar, line)
+							current.file.functionOutput += `scoreboard players set ${scope.getGameVar(name, line).entryName} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.outputLines++;
+							return;
+						}
+						
+						// Equal: game variable
+						if(line[3].startsWith("&")){
+							let varObj = scope.getGameVar(line[3].substring(1), line)
+							scope.setGameVar(name, varObj.value, line)
+							current.file.functionOutput += `scoreboard players operation ${scope.getGameVar(name, line).entryName} ${gameVarScoreboard} = ${varObj.entryName} ${gameVarScoreboard}\n`;
+							current.file.outputLines++;
+							return;
+						}
+
 						tempVar = Number(line.slice(3).join(" ").replaceAll(",", ""));
-						if (isNaN(tempVar)) { // Equal: string
+						if (isNaN(tempVar)) {
+						// Equal: string
 							throw new MCFSError("User Error", "Game variables can only be numbers", line);
-						} else {// Equal: number
+						} else {
+						// Equal: number
 							if (tempVar > 2147483647) throw new MCFSError("User Error", "Game variables cannot be higher than 2147483647")
 							if (tempVar < -2147483648) throw new MCFSError("User Error", "Game variables cannot be lower than -2147483648")
+							if (tempVar - Math.floor(tempVar) === 0) throw new MCFSError("User Error", "Game variables must be integers")
 							let varObj = scope.setGameVar(name, tempVar, line);
-							current.file.functionOutput += `scoreboard players set ${varObj.scoreboardName} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.functionOutput += `scoreboard players set ${varObj.entryName} ${gameVarScoreboard} ${tempVar}\n`;
 							current.file.outputLines++;
 						}
 						break;
@@ -415,16 +469,16 @@ export function main(inputs, flags) {
 							// Add: variable
 							if (value[0] === "$") {
 								tempVar = value.substring(1);
-								scope.getCompilerVarList(name, line)[name] += scope.getCompilerVarList(tempVar, line)[tempVar]
+								scope.getCompVarList(name, line)[name] += scope.getCompVarList(tempVar, line)[tempVar]
 							} else { // Add: string
-								scope.getCompilerVarList(name, line)[name] += value.substring(1, value.length - 1);
+								scope.getCompVarList(name, line)[name] += value.substring(1, value.length - 1);
 							}
 						} else { // Add: number
-							scope.getCompilerVarList(name, line)[name] += tempVar;
+							scope.getCompVarList(name, line)[name] += tempVar;
 						}
 						break;
 					case "-":
-						tempVar = scope.getCompilerVarList(name, line)[name];
+						tempVar = scope.getCompVarList(name, line)[name];
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${tempVar})`, line)
 						}
@@ -432,11 +486,11 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to subtract using a non-numeric value (${value})`, line)
 						} else {
-							scope.getCompilerVarList(name, line)[name] -= value;
+							scope.getCompVarList(name, line)[name] -= value;
 						}
 						break;
 					case "*":
-						tempVar = scope.getCompilerVarList(name, line)[name];
+						tempVar = scope.getCompVarList(name, line)[name];
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to multiply a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -444,11 +498,11 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to multiply using a non-numeric value (${value})`, line)
 						} else {
-							scope.getCompilerVarList(name, line)[name] *= value;
+							scope.getCompVarList(name, line)[name] *= value;
 						}
 						break;
 					case "/":
-						tempVar = scope.getCompilerVarList(name, line)[name];
+						tempVar = scope.getCompVarList(name, line)[name];
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to divide a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -456,23 +510,14 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to divide using a non-numeric value (${value})`, line)
 						} else {
-							scope.getCompilerVarList(name, line)[name] /= value;
+							scope.getCompVarList(name, line)[name] /= value;
 						}
 						break;
 					case "^":
-						tempVar = scope.getCompilerVarList(name, line)[name];
-						if (typeof tempVar !== "number") {
-							throw new MCFSError("User Error", `Attempted to exponentiate a non-numeric variable (${name}: ${variable})`, line)
-						}
-						tempVar = Number(value);
-						if (isNaN(tempVar)) {
-							throw new MCFSError("User Error", `Attempted to exponentiate using a non-numeric value (${value})`, line)
-						} else {
-							scope.getCompilerVarList(name, line)[name] **= value;
-						}
+						throw new MCFSError("User Error", "Minecraft doesnt support exponentiation of game vars. Use a repeat with multiplication instead.")
 						break;
 					case "%":
-						tempVar = scope.getCompilerVarList(name, line)[name];
+						tempVar = scope.getCompVarList(name, line)[name];
 						if (typeof tempVar !== "number") {
 							throw new MCFSError("User Error", `Attempted to modulate a non-numeric variable (${name}: ${variable})`, line)
 						}
@@ -480,7 +525,7 @@ export function main(inputs, flags) {
 						if (isNaN(tempVar)) {
 							throw new MCFSError("User Error", `Attempted to modulate using a non-numeric value (${value})`, line)
 						} else {
-							scope.getCompilerVarList(name, line)[name] %= value;
+							scope.getCompVarList(name, line)[name] %= value;
 						}
 						break;
 					default:
@@ -502,7 +547,7 @@ export function main(inputs, flags) {
 		}
 		for(let str of line){
 			if(str[0] === "$"){
-				str = scope.getCompilerVar(str.substring(1), line)
+				str = scope.getCompVar(str.substring(1), line)
 			}
 			current.file.functionOutput += str + " "
 		}
@@ -516,10 +561,13 @@ export function main(inputs, flags) {
 		scope.times = Number(line[1]);
 		current.file.functionOutput = "";
 	}, function(scope){
-		// We do it once outside and count lines so debugging works
+		scope.collectInstructions = false;
 		for (let i = 0; i < scope.times; i++) {
+			scope.compVars = {};
+			scope.gameVars = {};
 			processInstructionArray(structuredClone(scope.contents))
 		}
+		current.file.scopes.pop();
 		current.file.functionOutput = scope.storedOutput + current.file.functionOutput;
 	})
 
@@ -528,7 +576,8 @@ export function main(inputs, flags) {
 		if (current.file.scopes.length === 0) {
 			throw new MCFSError("User Error", "\"end\" instruction called while no scope is active", line);
 		}
-		current.file.scopes.pop().instruction.onScopeEnd(scope);
+		current.scope.instruction.onScopeEnd(scope);
+		current.scope.discard();
 		current.scope = current.file.scopes[current.file.scopes.length-1]
 	})
 
@@ -545,7 +594,7 @@ export function main(inputs, flags) {
 		let outputArr = line.slice(1);
 		for (let str of outputArr) {
 			if (str[0] === "$") {
-				str = scope.getCompilerVar(str.substring(1), line)
+				str = scope.getCompVar(str.substring(1), line)
 			}
 			output += str + " "
 		}
@@ -554,6 +603,7 @@ export function main(inputs, flags) {
 
 	// Compiling
 	function processInstructionArray(arr) {
+		let endsToSkip = 0;
 		for (let line of arr) {
 			// Skip comments
 			if (line[0] === "#") continue;
@@ -562,13 +612,31 @@ export function main(inputs, flags) {
 			if (instruct === undefined){
 				throw new MCFSError("User Error", `Unknown instruction "${line[0]}"`, line)
 			}
-			// Dont activate scoped or end instructions right away
-			// If its the main file scope (scopes.length!==1) then we are able to just process it now
-			if (current.file.scopes.length !== 1 && line[0] !== "end" && !instruct.doesScope) {
-				current.scope.contents.push(line);
-				continue;
+
+			// If we are scoping, add it to the current scope
+			if (current.file.scopes.length !== 1) {
+				if(instruct.doesScope === true){
+					endsToSkip++
+				}
+
+				// If we reach an end instruct and we arent skipping anymore execute the end
+				if(line[0] === "end"){
+					if(endsToSkip === 0){
+						instructions[line[0]].onCall(line, current.scope)
+						continue;
+					}else{
+						endsToSkip--;
+					}
+				}
+
+				// Check if the scope wants to collect it or run it
+				if (current.scope.collectInstructions === true){
+					current.scope.contents.push(line);
+					continue;
+				}
 			}
-			// Activate regular instructions
+
+			// We arent scoping or we arent collecting, run the instruction
 			if (instruct) {
 				if (instruct.doesScope === true) {
 					new Scope(instruct, line.line);
@@ -621,6 +689,7 @@ export function main(inputs, flags) {
 			throw new MCFSError("Compiler Error", "Missing file scope (there should be one scope left upon compiling a file)")
 		}
 		current.file.scopes.pop().instruction.onScopeEnd(current.scope)
+		current.scope.discard();
 		current.scope = current.file.scopes[current.file.scopes.length-1];
 		return files.pop();
 	}

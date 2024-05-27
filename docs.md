@@ -41,10 +41,11 @@ Ex: `var &adder = 123456`
 ##### $ (Compiler variables)
 Dollar signs represent compiler variables. These variables can be thought of as "macro variables" found in some other languages.
 Their values are calculated during compile time and their output is put directly into the resulting mcfunction file.
-All values that can be applied via operations must be a string ("like this"), a boolean (true/false), a number (1000.1), or another compiler variable.
+All values that can be applied via operations must be a string ("like this"), a boolean (true/false), a number (1,000.1), or another compiler variable.\
+Compiler variables cannnot be changed (=, +, -, etc.) by game variables because game variables are calculated during run time.
 Adding a string to a number, or the other way around, will just append the number to the string in it's respective order.
 If you call an undefined compiler variable an error will be thrown and the build process will fail.
-Here is an example.
+Here is an example:
 Input:
 ```mcfs
 var $counter = 0;
@@ -59,18 +60,8 @@ say counter is at: 1
 say counter is at: 2
 say counter is at: 3
 ```
-
-##### & (Game variables)
-Ampersands represent in-game variables. In a nut shell, these variables are just dummy scoreboard players that are managed by MCFS. Due to minecraft's limitations the only values these variables can be are the numbers through... TODO: ADD THE NUMBERS. The big difference between game variables and compilier variables is that game variables are calculated and stored inside of minecraft, meaning, they are able to be used dynamically in commands such as tellraw or titleraw. If you call an undefined game variable an error will be thrown and the build process will fail. Here is an example.
-TODO: MAKE THE INPUT AND OUTPUT
-Input:
-```mcfs
-```
-Output:
-```mcfunction
-```
-
-#### Operations
+###### $ Operations
+The operations for compiler variables are limited to basic arithmetic.
 - =
 	- Sets the variable equal to the value
 - \+
@@ -83,7 +74,45 @@ Output:
 	- Divides the variable by the value
 - \^
 	- Exponentiates the variable by the value
-	- TODO: Might be REALLY bad for game vars
+- %
+	- Sets the variable to the result of a modulus operation on the variable by the value
+- `round <up/down/auto>`
+	- Rounds the variable up or down
+
+
+##### & (Game variables)
+Ampersands represent in-game variables. In a nut shell, these variables are just dummy scoreboard players that are managed by MCFS. Due to minecraft's limitations the only values these variables can be are the numbers through are -2147483648 and 2147483647. The big difference between game variables and compilier variables is that game variables are calculated and stored inside of minecraft, meaning, they are able to be used dynamically in commands such as tellraw or titleraw. However, due to their uncertainty, often times, they cannot be calculated during compilation. This means game variables and compiler variables dont often mingle, look at the opeations to learn more. If you call an undefined game variable an error will be thrown and the build process will fail.
+Here is an example.
+TODO: MAKE THE INPUT AND OUTPUT
+Input:
+```mcfs
+```
+Output:
+```mcfunction
+```
+Game variables have an additional option thats an operation; you can use external scoreboards.
+```
+- `var &example = scoreboard <selector/"value"> <scoreboard objective>`
+- UNSAFE METHOD: MCFS does not validate that scoreboard or selector exists and it might cause unexpected behavior in your program
+```
+
+###### & Operations
+- =
+	- Sets the variable equal to the value
+	- Can be set to compiler variables
+	- Can be set to a player on a scoreboard
+- \+
+	- Adds the value to the variable
+	- Can add compiler variables
+- \-
+	- Subtracts the value from the variable
+	- Can subtract compiler variables
+- \*
+	- Multiplies the variable by the value
+	- Can multiply by compiler variables
+- \\
+	- Divides the variable by the value
+	- Can divide by compiler variables
 - %
 	- Sets the variable to the result of a modulus operation on the variable by the value
 

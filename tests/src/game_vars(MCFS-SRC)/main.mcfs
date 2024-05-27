@@ -1,1 +1,3 @@
-var &gamevar = 10;
+var $compvar = 1.1;
+var $compvar round auto;
+var &gamevar = $compvar;
