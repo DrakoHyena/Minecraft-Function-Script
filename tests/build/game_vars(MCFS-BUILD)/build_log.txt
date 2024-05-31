@@ -1,2 +1,3 @@
-[5/27/2024, 6:09:46 PM] Building: game_vars
-[5/27/2024, 6:09:46 PM] Building finished in 0.271s
+[5/30/2024, 11:12:26 PM] Building: game_vars
+[Info][File:./main.mcfs][Line:7] Log contained game variable so it will be logged in game during runtime instead.
+[5/30/2024, 11:12:26 PM] Building finished in 0.032s

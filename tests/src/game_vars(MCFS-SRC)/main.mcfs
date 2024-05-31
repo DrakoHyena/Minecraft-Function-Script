@@ -1,4 +1,8 @@
 var &smth = 0;
+var &gv = 1;
+var $cv = "this is a compiler variable"; 
 repeat 5
-	var &smth + 1
+	var &smth + &gv
 end
+
+log Game variable: &smth | Compiler variable: $cv

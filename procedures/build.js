@@ -7,6 +7,7 @@ import { generateCommandBlock } from "../mcstructure/coder.js";
 import { genCode } from "../codegen/index.js";
 import { pathToFileURL } from "node:url";
 import { get } from "node:http";
+import { tmpdir } from "node:os";
 
 let bhPackFolder = `${process.env.APPDATA}\\..\\Local\\Packages\\Microsoft.MinecraftUWP_8wekyb3d8bbwe\\LocalState\\games\\com.mojang\\development_behavior_packs\\`
 
@@ -130,6 +131,7 @@ export function main(inputs, flags) {
 	const log = {
 		content: `[${(new Date).toLocaleString()}] Building: ${projectDetails.name}\n`,
 		warnings: 0,
+		info: 0,
 		unsafeMethods: 0
 	}
 	log.add = function(type, msg, line) {
@@ -138,7 +140,7 @@ export function main(inputs, flags) {
 	log.write = function() {
 		if (fs.existsSync(buildPath)) {
 			fs.writeFileSync(buildPath + "build_log.txt", log.content, "utf8")
-			console.log(`Build logs written to build_log.txt\n- Warnings: ${log.warnings}\n- Unsafe Methods: ${log.unsafeMethods}`)
+			console.log(`Build logs written to build_log.txt\n- Warnings: ${log.warnings}\n- Unsafe Methods: ${log.unsafeMethods}\n- Info: ${log.info}`)
 		}else{
 			console.log("Failed to write build logs due to the buildPath not existing");
 		}
@@ -275,6 +277,30 @@ export function main(inputs, flags) {
 		}else if (value < -2147483648) {
 			log.add("Warning", `Game variable "${name}" was calculated to be below the minimum value of -2147483648`, line);
 			log.warnings++;
+		}
+	}
+
+	class Tellraw{
+		constructor(selector){
+			this.rawtextArr = [];
+			this.command = `tellraw ${selector} `
+		}
+		add(type, thing1, thing2){
+			switch(type){
+				case "text":
+					this.rawtextArr.push({"text":thing1.replaceAll(`"`, `\\"`)})
+				break;
+				case "selector":
+					this.rawtextArr.push({"selector":thing1.replaceAll(`"`, `\\"`)})
+				break;
+				case "score":
+					this.rawtextArr.push({"score":{"name":thing1, "objective": thing2}})
+				break;
+			}
+			return this;
+		}
+		build(){
+			return this.command + `{"rawtext":${JSON.stringify(this.rawtextArr)}}`
 		}
 	}
 
@@ -552,10 +578,10 @@ export function main(inputs, flags) {
 						if (line[3] === "scoreboard") {
 							if (line[6]) throw new MCFSError("User Error", `Addition should only be a selector and a scoreboard. However "${line[4]}" was also found`, line)
 							if (line[4] === undefined || line[5] === undefined) {
-								throw new MCFSError("User Error", "Missing selector or scoreboard when setting a game variable to a scoreboard")
+								throw new MCFSError("User Error", "Missing selector or scoreboard when adding a scoreboard to a game variable")
 							}
 							scope.setGameVar(name, 0, line);
-							current.file.functionOutput += `scoreboard players operation ${scope.getGameVar(name, line).entryName} ${gameVarScoreboard} = ${line[4]} ${line[5]}\n`;
+							current.file.functionOutput += `scoreboard players operation ${scope.getGameVar(name, line).entryName} ${gameVarScoreboard} += ${line[4]} ${line[5]}\n`;
 							current.file.outputLines++;
 							log.unsafeMethods++;
 							log.add("Unsafe Method", "MCFS cannot guarantee if the player or scoreboard you are calling exists. This can cause unexpected behavior.", line)
@@ -572,9 +598,9 @@ export function main(inputs, flags) {
 							if (tempVar - Math.floor(tempVar) !== 0) {
 								throw new MCFSError("User Error", "Tried to add a compiler variable to a game variable but the compiler variable had decimals")
 							}
-							let varObj = scope.setGameVar(name, tempVar, line)
+							let varObj = scope.setGameVar(name, scope.getGameVar(name, line).value+tempVar, line)
 							warnGameVarRange(name, varObj.value, line);
-							current.file.functionOutput += `scoreboard players set ${varObj.entryName} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.functionOutput += `scoreboard players add ${varObj.entryName} ${gameVarScoreboard} ${tempVar}\n`;
 							current.file.outputLines++;
 							return;
 						}
@@ -604,15 +630,64 @@ export function main(inputs, flags) {
 						}
 						break;
 					case "-":
-						tempVar = scope.getCompVarList(name, line)[name];
-						if (typeof tempVar !== "number") {
-							throw new MCFSError("User Error", `Attempted to subtract from a non-numeric variable (${name}: ${tempVar})`, line)
+						// Subtract: nothing
+						if (value === undefined) {
+							throw new MCFSError("User Error", "Cannot subtract nothing from a game variable", line);
 						}
-						tempVar = Number(value);
+
+						// Subtract: scoreboard
+						if (line[3] === "scoreboard") {
+							if (line[6]) throw new MCFSError("User Error", `Subtraction should only be a selector and a scoreboard. However "${line[4]}" was also found`, line)
+							if (line[4] === undefined || line[5] === undefined) {
+								throw new MCFSError("User Error", "Missing selector or scoreboard when subtracting a scoreboard from a game variable")
+							}
+							scope.setGameVar(name, 0, line);
+							current.file.functionOutput += `scoreboard players operation ${scope.getGameVar(name, line).entryName} ${gameVarScoreboard} -= ${line[4]} ${line[5]}\n`;
+							current.file.outputLines++;
+							log.unsafeMethods++;
+							log.add("Unsafe Method", "MCFS cannot guarantee if the player or scoreboard you are calling exists. This can cause unexpected behavior.", line)
+							return;
+						}
+
+						// Subtract: compiler variable
+						if (line[3].startsWith("$")) {
+							if (line[4]) throw new MCFSError("User Error", `Subtraction should only contain a compiler variable, also found "${line[4]}"`, line)
+							tempVar = Number(scope.getCompVar(value.substring(1), line));
+							if (isNaN(tempVar)) {
+								throw new MCFSError("User Error", "Tried to subtract a compiler variable from a game variable but the compiler variable was a string")
+							}
+							if (tempVar - Math.floor(tempVar) !== 0) {
+								throw new MCFSError("User Error", "Tried to subtract a compiler variable to a game variable but the compiler variable had decimals")
+							}
+							let varObj = scope.setGameVar(name, scope.getGameVar(name, line).value - tempVar, line)
+							warnGameVarRange(name, varObj.value, line);
+							current.file.functionOutput += `scoreboard players remove ${varObj.entryName} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.outputLines++;
+							return;
+						}
+
+						// Subtract: game variable
+						if (line[3].startsWith("&")) {
+							if (line[4]) throw new MCFSError("User Error", `Subtraction should only contain a game variable, also found "${line[4]}"`, line)
+							tempVar = scope.getGameVar(line[3].substring(1), line)
+							let varObj = scope.setGameVar(name, scope.getGameVar(name, line).value + tempVar.value, line)
+							warnGameVarRange(name, varObj.value, line);
+							current.file.functionOutput += `scoreboard players operation ${varObj.entryName} ${gameVarScoreboard} -= ${tempVar.entryName} ${gameVarScoreboard}\n`;
+							current.file.outputLines++;
+							return;
+						}
+
+						tempVar = Number(line.slice(3).join(" ").replaceAll(",", ""));
 						if (isNaN(tempVar)) {
-							throw new MCFSError("User Error", `Attempted to subtract using a non-numeric value (${value})`, line)
+							// Subtract: string
+							throw new MCFSError("User Error", "Cannot subtract strings from game variables", line);
 						} else {
-							scope.getCompVarList(name, line)[name] -= value;
+							// Subtract: number
+							let varObj = scope.setGameVar(name, scope.getGameVar(name, line).value - tempVar, line);
+							warnGameVarRange(name, varObj.value, line);
+							if (tempVar - Math.floor(tempVar) !== 0) throw new MCFSError("User Error", "Game variables must be integers")
+							current.file.functionOutput += `scoreboard players remove ${varObj.entryName} ${gameVarScoreboard} ${tempVar}\n`;
+							current.file.outputLines++;
 						}
 						break;
 					case "*":
@@ -716,15 +791,35 @@ export function main(inputs, flags) {
 
 	// LOG INSTRUCTION
 	new Instruction("log", (line, scope)=>{
-		let output = "";
-		let outputArr = line.slice(1);
-		for (let str of outputArr) {
+		let tellraw = undefined
+		let tempStr = "";
+		for (let str of line.slice(1)) {
 			if (str[0] === "$") {
-				str = scope.getCompVar(str.substring(1), line)
+				tempStr += scope.getCompVar(str.substring(1), line)
+				continue;
 			}
-			output += str + " "
+			if(str[0] === "&"){
+				if (tellraw === undefined) tellraw = new Tellraw("@a").add("text", `§7[${current.file.relPath}][${line.line}] `)
+				if(tempStr !== ""){
+					tellraw.add("text", tempStr);
+					tempStr = "";
+				}
+				tellraw.add("score", scope.getGameVar(str.substring(1), line).entryName, gameVarScoreboard);
+				tempStr += " "
+				continue;
+			}
+			tempStr += str + " "
 		}
-		console.log(`[${current.file.relPath}][${line.line}] ${output}`);
+		if(tellraw !== undefined){
+			if(tempStr !== "") tellraw.add("text", tempStr);
+			log.add("Info", `Log contained game variable so it will be logged in game during runtime instead.`, line);
+			log.info++;
+			console.log(`[${current.file.relPath}][${line.line}] Log contained game variable so it will be logged in game during runtime instead.`);
+			current.file.functionOutput += tellraw.build() + "\n";
+			current.file.outputLines++;
+		}else{
+			console.log(`[${current.file.relPath}][${line.line}] ${tempStr}`);
+		}
 	})
 
 	// Compiling
@@ -836,7 +931,7 @@ export function main(inputs, flags) {
 		while(i < file.functionOutput.length){
 			// Gather lineLimit amount of lines
 			if(file.functionOutput[i] === "\n"){
-				fileContent += file.functionOutput.substring(iStart, (lines===lineLimit-1 ? i-1 : i));
+				fileContent += file.functionOutput.substring(iStart, i);
 				iStart = (lines===lineLimit-1 ? i+1 : i);
 				lines++
 			}
@@ -850,7 +945,7 @@ export function main(inputs, flags) {
 					let structureName = genCode();
 					fs.writeFileSync(`${buildPath}functions/${name}.mcfunction`, fileContent, "utf8")
 					fs.writeFileSync(`${buildPath}structures/${structureName}.mcstructure`, generateCommandBlock(`function ${name.substring(2)}`));
-					fs.appendFileSync(`${buildPath}functions/${lastFile}.mcfunction`, `\nstructure load ${structureName} ~ -64 ~`, "utf8")
+					fs.appendFileSync(`${buildPath}functions/${lastFile}.mcfunction`, `\nstructure load "${structureName}" ~ -64 ~`, "utf8")
 					lastFile = name
 				}
 				lines = 0;
